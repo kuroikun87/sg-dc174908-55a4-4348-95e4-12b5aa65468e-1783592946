@@ -3,9 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-console.log("[Supabase Debug] URL exists:", !!supabaseUrl);
-console.log("[Supabase Debug] Key exists:", !!supabaseKey);
-
 if (!supabaseUrl || !supabaseKey) {
   console.error("[Supabase] Faltan variables de entorno");
 }
