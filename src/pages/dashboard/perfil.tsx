@@ -23,14 +23,19 @@ export default function Perfil() {
     setIsLeaving(true);
     
     try {
-      // Solo actualizar el perfil - NO intentar borrar el culto (evita problemas de foreign keys)
-      const { error } = await supabase
+      // Actualizar perfil con .select() para verificar que funcionó
+      const { data: updatedRows, error } = await supabase
         .from("profiles")
         .update({ cult_id: null, role: null, is_main_deity: false, title: null })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select();
       
       if (error) {
         throw new Error(`Error al actualizar perfil: ${error.message}`);
+      }
+      
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error("No se pudo actualizar el perfil. Es posible que no tengas permisos.");
       }
       
       toast({
@@ -38,13 +43,17 @@ export default function Perfil() {
         description: "Tu sesión será cerrada.",
       });
       
-      // Cerrar sesión usando el contexto (limpia estado + localStorage)
-      await signOut();
+      // Cerrar sesión con manejo de errores
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        throw new Error(`Error al cerrar sesión: ${signOutError.message}`);
+      }
       
-      // Pequeño delay para asegurar que todo se limpió, luego recarga completa
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 300);
+      // Limpiar estado local manualmente por si acaso
+      window.localStorage.removeItem("supabase.auth.token");
+      
+      // Recarga completa
+      window.location.href = "/";
       
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";
