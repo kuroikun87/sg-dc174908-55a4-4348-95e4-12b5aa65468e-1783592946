@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Book, Crown, Heart, ChevronRight, Flame, Scroll } from "lucide-react";
+import { useRouter } from "next/router";
+import { Book, Crown, Heart, ChevronRight, Flame, Scroll, Loader2 } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [selectedRole, setSelectedRole] = useState<"deity" | "follower" | null>(null);
@@ -136,6 +139,10 @@ function RoleCard({
   onClick: () => void;
   accent: "wine" | "gold";
 }) {
+  const accentClasses = accent === "wine" 
+    ? "hover:border-wine/50 text-wine hover:shadow-wine/20"
+    : "hover:border-gold/50 text-gold hover:shadow-gold/20";
+
   return (
     <motion.button
       whileHover={{ scale: 1.02, y: -2 }}
@@ -145,11 +152,11 @@ function RoleCard({
         group relative w-full p-6 text-left
         bg-card/60 backdrop-blur-sm
         border border-border/50 rounded-sm
-        hover:border-${accent}/50 transition-all duration-300
-        hover:shadow-lg hover:shadow-black/30
+        ${accentClasses} transition-all duration-300
+        hover:shadow-lg
       `}
     >
-      <div className={`text-${accent} mb-3 transition-transform duration-300 group-hover:scale-110`}>
+      <div className={`${accent === "wine" ? "text-wine" : "text-gold"} mb-3 transition-transform duration-300 group-hover:scale-110`}>
         {icon}
       </div>
       <h3 className="font-heading text-xl text-foreground mb-2 group-hover:text-gold transition-colors">
@@ -158,14 +165,14 @@ function RoleCard({
       <p className="font-body text-sm text-muted-foreground leading-relaxed mb-4">
         {description}
       </p>
-      <div className={`flex items-center gap-1 text-${accent} text-sm font-heading`}>
+      <div className={`flex items-center gap-1 ${accent === "wine" ? "text-wine" : "text-gold"} text-sm font-heading`}>
         <span>Continuar</span>
         <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
       </div>
 
       {/* Decoración esquina */}
-      <div className={`absolute top-2 right-2 w-4 h-4 border-t border-r border-${accent}/20 opacity-0 group-hover:opacity-100 transition-opacity`} />
-      <div className={`absolute bottom-2 left-2 w-4 h-4 border-b border-l border-${accent}/20 opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute top-2 right-2 w-4 h-4 border-t border-r ${accent === "wine" ? "border-wine/20" : "border-gold/20"} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute bottom-2 left-2 w-4 h-4 border-b border-l ${accent === "wine" ? "border-wine/20" : "border-gold/20"} opacity-0 group-hover:opacity-100 transition-opacity`} />
     </motion.button>
   );
 }
@@ -175,30 +182,61 @@ function AuthForm({ role, onBack }: { role: "deity" | "follower"; onBack: () => 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { signIn, signUp } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implementar autenticación con Supabase
-    console.log("Auth:", { email, password, displayName, role, isSignUp });
+    setIsLoading(true);
+
+    try {
+      if (isSignUp) {
+        await signUp(email, password, role, displayName);
+        toast({
+          title: "Cuenta creada",
+          description: "Revisa tu correo para confirmar tu entrada al culto.",
+        });
+      } else {
+        await signIn(email, password);
+        toast({
+          title: "Bienvenido",
+          description: "Has entrado al grimorio.",
+        });
+        router.push("/dashboard");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Algo salió mal en el ritual",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <label className="font-heading text-sm text-muted-foreground tracking-wide">
-          Nombre o título ritual
-        </label>
-        <input
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          className="w-full bg-background/50 border border-border rounded-sm px-4 py-3
-                     text-foreground font-body placeholder:text-muted-foreground/50
-                     focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/20
-                     transition-all"
-          placeholder="Cómo te conocerán en el culto"
-        />
-      </div>
+      {isSignUp && (
+        <div className="space-y-2">
+          <label className="font-heading text-sm text-muted-foreground tracking-wide">
+            Nombre o título ritual
+          </label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required={isSignUp}
+            className="w-full bg-background/50 border border-border rounded-sm px-4 py-3
+                       text-foreground font-body placeholder:text-muted-foreground/50
+                       focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/20
+                       transition-all"
+            placeholder="Cómo te conocerán en el culto"
+          />
+        </div>
+      )}
 
       <div className="space-y-2">
         <label className="font-heading text-sm text-muted-foreground tracking-wide">
@@ -208,6 +246,7 @@ function AuthForm({ role, onBack }: { role: "deity" | "follower"; onBack: () => 
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
           className="w-full bg-background/50 border border-border rounded-sm px-4 py-3
                      text-foreground font-body placeholder:text-muted-foreground/50
                      focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/20
@@ -224,6 +263,8 @@ function AuthForm({ role, onBack }: { role: "deity" | "follower"; onBack: () => 
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={6}
           className="w-full bg-background/50 border border-border rounded-sm px-4 py-3
                      text-foreground font-body placeholder:text-muted-foreground/50
                      focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/20
@@ -236,8 +277,13 @@ function AuthForm({ role, onBack }: { role: "deity" | "follower"; onBack: () => 
         type="submit"
         variant={role === "deity" ? "wine" : "gold"}
         className="w-full"
+        disabled={isLoading}
       >
-        {isSignUp ? "Crear cuenta" : "Entrar al culto"}
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+        ) : (
+          isSignUp ? "Crear cuenta" : "Entrar al culto"
+        )}
       </RitualButton>
 
       <div className="flex items-center justify-between pt-2">
