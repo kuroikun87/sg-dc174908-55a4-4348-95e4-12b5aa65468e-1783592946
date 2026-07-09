@@ -4,16 +4,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { ParchmentCard } from "@/components/ui/parchment-card";
-import { User, Crown, LogOut, AlertTriangle } from "lucide-react";
+import { User, Crown, LogOut, AlertTriangle, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Perfil() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleLeaveCult = async () => {
     if (!user) {
@@ -23,7 +25,6 @@ export default function Perfil() {
     setIsLeaving(true);
     
     try {
-      // Actualizar perfil con .select() para verificar que funcionó
       const { data: updatedRows, error } = await supabase
         .from("profiles")
         .update({ cult_id: null, role: null, is_main_deity: false, title: null })
@@ -35,7 +36,7 @@ export default function Perfil() {
       }
       
       if (!updatedRows || updatedRows.length === 0) {
-        throw new Error("No se pudo actualizar el perfil. Es posible que no tengas permisos.");
+        throw new Error("No se pudo actualizar el perfil.");
       }
       
       toast({
@@ -43,16 +44,8 @@ export default function Perfil() {
         description: "Tu sesión será cerrada.",
       });
       
-      // Cerrar sesión con manejo de errores
-      const { error: signOutError } = await supabase.auth.signOut();
-      if (signOutError) {
-        throw new Error(`Error al cerrar sesión: ${signOutError.message}`);
-      }
-      
-      // Limpiar estado local manualmente por si acaso
-      window.localStorage.removeItem("supabase.auth.token");
-      
-      // Recarga completa
+      await supabase.auth.signOut();
+      window.localStorage.clear();
       window.location.href = "/";
       
     } catch (error) {
@@ -63,6 +56,56 @@ export default function Perfil() {
         variant: "destructive",
       });
       setIsLeaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) {
+      toast({ title: "Error", description: "No hay sesión activa", variant: "destructive" });
+      return;
+    }
+    setIsDeleting(true);
+    
+    try {
+      // 1. Borrar culto si es deidad principal
+      const { data: myCult } = await supabase
+        .from("cults")
+        .select("id")
+        .eq("main_deity_id", user.id)
+        .maybeSingle();
+      
+      if (myCult?.id) {
+        await supabase.from("cults").delete().eq("id", myCult.id);
+      }
+      
+      // 2. Borrar perfil
+      const { error: deleteProfileError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", user.id);
+      
+      if (deleteProfileError) {
+        throw new Error(`Error al borrar perfil: ${deleteProfileError.message}`);
+      }
+      
+      toast({
+        title: "Cuenta eliminada",
+        description: "Todos tus datos han sido borrados.",
+      });
+      
+      // 3. Cerrar sesión
+      await supabase.auth.signOut();
+      window.localStorage.clear();
+      window.location.href = "/";
+      
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Error desconocido";
+      toast({
+        title: "Error al eliminar",
+        description: msg,
+        variant: "destructive",
+      });
+      setIsDeleting(false);
     }
   };
 
@@ -102,7 +145,7 @@ export default function Perfil() {
               <div className="flex items-start gap-2">
                 <AlertTriangle className="w-5 h-5 text-wine flex-shrink-0" />
                 <p className="font-body text-sm text-foreground">
-                  ¿Estás seguro? Perderás el acceso a este culto y deberás crear uno nuevo o usar un código de invitación.
+                  ¿Abandonar el culto? Podrás crear uno nuevo o unirte con un código.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -119,6 +162,44 @@ export default function Perfil() {
                   className="flex-1"
                   onClick={() => setShowLeaveConfirm(false)}
                   disabled={isLeaving}
+                >
+                  Cancelar
+                </RitualButton>
+              </div>
+            </div>
+          )}
+
+          {!showDeleteConfirm ? (
+            <RitualButton
+              variant="outline"
+              className="w-full border-wine/50 text-wine hover:bg-wine/10"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Borrar cuenta completamente
+            </RitualButton>
+          ) : (
+            <div className="p-4 bg-wine/10 border border-wine/30 rounded-sm space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-wine flex-shrink-0" />
+                <p className="font-body text-sm text-foreground">
+                  ¿Eliminar tu cuenta PERMANENTEMENTE? Se borrarán todos tus datos, incluyendo el culto si eres deidad principal. Esta acción no se puede deshacer.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <RitualButton
+                  variant="wine"
+                  className="flex-1"
+                  onClick={handleDeleteAccount}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Borrando..." : "Sí, eliminar todo"}
+                </RitualButton>
+                <RitualButton
+                  variant="ghost"
+                  className="flex-1"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
                 >
                   Cancelar
                 </RitualButton>
