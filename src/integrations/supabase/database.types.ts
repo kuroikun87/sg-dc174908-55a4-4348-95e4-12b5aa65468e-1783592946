@@ -218,7 +218,9 @@ export type Database = {
       cults: {
         Row: {
           created_at: string | null
+          deity_invite_code: string | null
           description: string | null
+          follower_invite_code: string | null
           id: string
           image_url: string | null
           main_deity_id: string | null
@@ -227,7 +229,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          deity_invite_code?: string | null
           description?: string | null
+          follower_invite_code?: string | null
           id?: string
           image_url?: string | null
           main_deity_id?: string | null
@@ -236,7 +240,9 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          deity_invite_code?: string | null
           description?: string | null
+          follower_invite_code?: string | null
           id?: string
           image_url?: string | null
           main_deity_id?: string | null
@@ -393,6 +399,57 @@ export type Database = {
           },
         ]
       }
+      invitation_codes: {
+        Row: {
+          code: string
+          created_at: string | null
+          creator_id: string
+          cult_id: string
+          id: string
+          is_active: boolean | null
+          max_uses: number | null
+          type: string
+          used_count: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          creator_id: string
+          cult_id: string
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          type: string
+          used_count?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          creator_id?: string
+          cult_id?: string
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          type?: string
+          used_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invitation_codes_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invitation_codes_cult_id_fkey"
+            columns: ["cult_id"]
+            isOneToOne: false
+            referencedRelation: "cults"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           content: string
@@ -435,28 +492,74 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
+          cult_id: string | null
+          display_name: string | null
           email: string | null
+          faith_points: number | null
           full_name: string | null
           id: string
+          invitation_code_used: string | null
+          invited_by: string | null
+          rank_id: string | null
+          role: string | null
+          title: string | null
           updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          cult_id?: string | null
+          display_name?: string | null
           email?: string | null
+          faith_points?: number | null
           full_name?: string | null
           id: string
+          invitation_code_used?: string | null
+          invited_by?: string | null
+          rank_id?: string | null
+          role?: string | null
+          title?: string | null
           updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string | null
+          cult_id?: string | null
+          display_name?: string | null
           email?: string | null
+          faith_points?: number | null
           full_name?: string | null
           id?: string
+          invitation_code_used?: string | null
+          invited_by?: string | null
+          rank_id?: string | null
+          role?: string | null
+          title?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_cult_id_fkey"
+            columns: ["cult_id"]
+            isOneToOne: false
+            referencedRelation: "cults"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ranks: {
         Row: {
