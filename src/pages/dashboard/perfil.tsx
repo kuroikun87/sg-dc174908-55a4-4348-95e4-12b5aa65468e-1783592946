@@ -6,28 +6,46 @@ import { RitualButton } from "@/components/ui/ritual-button";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { User, Crown, LogOut, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Perfil() {
   const { profile, user, signOut } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
   const handleLeaveCult = async () => {
-    if (!user) return;
-    setIsLeaving(true);
-    try {
-      await supabase
-        .from("profiles")
-        .update({ cult_id: null, role: null, is_main_deity: false })
-        .eq("id", user.id);
-      await signOut();
-      router.push("/");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLeaving(false);
+    if (!user) {
+      toast({ title: "Error", description: "No hay sesión activa", variant: "destructive" });
+      return;
     }
+    setIsLeaving(true);
+    
+    const { error } = await supabase
+      .from("profiles")
+      .update({ cult_id: null, role: null, is_main_deity: false })
+      .eq("id", user.id);
+    
+    if (error) {
+      toast({
+        title: "Error al abandonar",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsLeaving(false);
+      return;
+    }
+    
+    // Éxito: cerrar sesión y redirigir
+    toast({
+      title: "Has abandonado el culto",
+      description: "Tu sesión ha sido cerrada.",
+    });
+    
+    await signOut();
+    router.push("/");
+    setIsLeaving(false);
   };
 
   return (
