@@ -1,6 +1,6 @@
 ---
 title: Esquema de Base de Datos Supabase
-status: in_progress
+status: done
 priority: urgent
 type: chore
 tags: [database, supabase, schema]
@@ -11,23 +11,26 @@ position: 6
 
 ## Notes
 
-Crear las tablas necesarias para toda la funcionalidad del grimorio:
-- cults, profiles, ranks, rules, tasks, rewards, consequences
-- fetishes, calendar_events, notes, hierarchy
-- session_cards, session_patterns, session_messages
+Esquema completo creado exitosamente con 14 tablas y políticas RLS.
 
 ## Checklist
 
-- [ ] Tabla cults (nombre, imagen, descripción, deidad principal)
-- [ ] Tabla profiles (usuarios con rol, rango, culto asignado)
-- [ ] Tabla ranks (rangos con niveles por culto)
-- [ ] Tabla rules (reglas, leyes, mandamientos, oraciones)
-- [ ] Tabla tasks (tareas con puntos de fe y evidencia)
-- [ ] Tabla rewards/consequences (premios y castigos con puntos)
-- [ ] Tabla fetishes (fetiches/prácticas con reacciones de fieles)
-- [ ] Tabla calendar_events (almanaque infinito)
-- [ ] Tabla notes (notas personales)
-- [ ] Tabla hierarchy (jerarquía de asignaciones)
-- [ ] Tabla session_cards (tarjetas de sesión BDSM)
-- [ ] Tabla session_patterns (patrones de beats guardados)
-- [ ] Políticas RLS para seguridad
+- [x] Tabla cults (nombre, imagen, descripción, deidad principal)
+- [x] Tabla profiles (usuarios con rol, rango, culto asignado)
+- [x] Tabla ranks (rangos con niveles por culto)
+- [x] Tabla rules (reglas, leyes, mandamientos, oraciones)
+- [x] Tabla tasks (tareas con puntos de fe y evidencia)
+- [x] Tabla rewards/consequences (premios y castigos con puntos)
+- [x] Tabla fetishes (fetiches/prácticas con reacciones de fieles)
+- [x] Tabla calendar_events (almanaque infinito)
+- [x] Tabla notes (notas personales)
+- [x] Tabla hierarchy (jerarquía de asignaciones)
+- [x] Tabla session_cards (tarjetas de sesión BDSM)
+- [x] Tabla session_patterns (patrones de beats guardados)
+- [x] Políticas RLS para seguridad
+
+## Acceptance
+
+- [x] El esquema de base de datos está completo
+- [x] Las políticas RLS están configuradas
+- [x] Los tipos TypeScript se generaron automáticamente
