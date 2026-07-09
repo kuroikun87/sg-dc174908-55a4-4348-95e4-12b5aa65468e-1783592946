@@ -73,7 +73,17 @@ export default function Home() {
       }
       
       // Esperar a que el perfil se cargue
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Si el usuario ya tiene un culto, no mostrar onboarding
+      if (profile?.cult_id) {
+        toast({
+          title: "Bienvenido de vuelta",
+          description: `Ya perteneces a un culto como ${profile?.is_main_deity ? "Deidad Principal" : profile?.role === "deity" ? "Deidad" : "Fiel"}.`,
+        });
+        // La pantalla de sesión activa se mostrará automáticamente
+        return;
+      }
       
       toast({
         title: "Cuenta creada",
