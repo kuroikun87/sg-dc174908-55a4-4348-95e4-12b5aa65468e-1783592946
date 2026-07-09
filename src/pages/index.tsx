@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/router";
 import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle, Check } from "lucide-react";
@@ -6,7 +6,6 @@ import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 
 type AuthStep = "landing" | "login" | "signup" | "onboarding";
 
@@ -17,29 +16,9 @@ export default function Home() {
   const [displayName, setDisplayName] = useState("");
   const [isOver18, setIsOver18] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [supabaseStatus, setSupabaseStatus] = useState<"checking" | "connected" | "error">("checking");
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-
-  useEffect(() => {
-    const checkSupabase = async () => {
-      try {
-        const { error } = await supabase.from("cults").select("*", { count: "exact", head: true });
-        if (error) {
-          console.error("[Health Check] Supabase error:", error.message, error.code);
-          setSupabaseStatus("error");
-        } else {
-          console.log("[Health Check] Supabase connected successfully");
-          setSupabaseStatus("connected");
-        }
-      } catch (e) {
-        console.error("[Health Check] Exception:", e);
-        setSupabaseStatus("error");
-      }
-    };
-    checkSupabase();
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +26,7 @@ export default function Home() {
     try {
       await signIn(email, password);
       toast({ title: "Bienvenido", description: "Has entrado al grimorio." });
-      router.push("/dashboard");
+      await router.push("/dashboard");
     } catch (error) {
       toast({
         title: "Error",
@@ -102,7 +81,6 @@ export default function Home() {
     <main className="min-h-screen bg-background parchment-texture py-4 px-2 md:px-4">
       <BookPage pageKey="landing">
         <div className="flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8 max-w-lg mx-auto">
-          {/* Título principal */}
           <motion.div
             initial={{ opacity: 0, y: -30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -129,7 +107,6 @@ export default function Home() {
             </p>
           </motion.div>
 
-          {/* Símbolo decorativo */}
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -316,7 +293,6 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Checkbox +18 */}
                 <div className={`p-4 rounded-sm border transition-all ${isOver18 ? 'bg-gold/5 border-gold/30' : 'bg-wine/5 border-wine/30'}`}>
                   <div className="flex items-start gap-3">
                     <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isOver18 ? 'text-gold' : 'text-wine'}`} />
@@ -390,7 +366,6 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          {/* Pie de página decorativo */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
