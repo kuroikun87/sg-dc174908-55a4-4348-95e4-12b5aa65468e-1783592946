@@ -50,12 +50,22 @@ export default function Home() {
     }
     setIsLoading(true);
     try {
-      await signUp(email, password, null, displayName);
-      toast({
-        title: "Cuenta creada",
-        description: "Tu cuenta ha sido sellada. Ahora elige tu camino.",
-      });
-      setStep("onboarding");
+      const result = await signUp(email, password, null, displayName);
+      
+      if (result.needsEmailConfirmation) {
+        toast({
+          title: "Verificación requerida",
+          description: "Revisa tu correo para confirmar tu cuenta antes de continuar.",
+          variant: "destructive",
+        });
+        setStep("landing");
+      } else {
+        toast({
+          title: "Cuenta creada",
+          description: "Tu cuenta ha sido sellada. Ahora elige tu camino.",
+        });
+        setStep("onboarding");
+      }
     } catch (error) {
       toast({
         title: "Error",
