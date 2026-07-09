@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { Heart, Star, ShieldAlert, MinusCircle, Meh, XCircle, Info, Plus, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Heart, Star, MinusCircle, Meh, XCircle, Plus } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ParchmentCard } from "@/components/ui/parchment-card";
@@ -16,12 +16,12 @@ interface Fetish {
 }
 
 const reactions = [
-  { key: "love", label: "Me encanta", icon: <Heart className="w-4 h-4" />, color: "text-wine" },
-  { key: "like", label: "Me gusta", icon: <Heart className="w-4 h-4" />, color: "text-gold" },
-  { key: "neutral", label: "Me da igual", icon: <MinusCircle className="w-4 h-4" />, color: "text-muted-foreground" },
-  { key: "soft_limit", label: "Límite blando", icon: <Meh className="w-4 h-4" />, color: "text-amber-400" },
-  { key: "hard_limit", label: "Límite duro", icon: <XCircle className="w-4 h-4" />, color: "text-red-500" },
-] as const;
+  { key: "love" as const, label: "Me encanta", icon: <Heart className="w-4 h-4" />, color: "text-wine" },
+  { key: "like" as const, label: "Me gusta", icon: <Heart className="w-4 h-4" />, color: "text-gold" },
+  { key: "neutral" as const, label: "Me da igual", icon: <MinusCircle className="w-4 h-4" />, color: "text-muted-foreground" },
+  { key: "soft_limit" as const, label: "Límite blando", icon: <Meh className="w-4 h-4" />, color: "text-amber-400" },
+  { key: "hard_limit" as const, label: "Límite duro", icon: <XCircle className="w-4 h-4" />, color: "text-red-500" },
+];
 
 const mockFetishes: Fetish[] = [
   { id: "1", name: "Restricción", description: "Uso de cuerdas, vendas y restricciones físicas", category: "Bondage", reaction: null, isCurious: false },
@@ -34,7 +34,7 @@ const mockFetishes: Fetish[] = [
 export default function FetichesPage() {
   const [fetishes, setFetishes] = useState<Fetish[]>(mockFetishes);
   const [selectedFetish, setSelectedFetish] = useState<string | null>(null);
-  const [isDeity] = useState(true); // En producción vendría del auth
+  const [isDeity] = useState(true);
 
   const setReaction = (id: string, reaction: Fetish["reaction"]) => {
     setFetishes(fetishes.map(f => f.id === id ? { ...f, reaction } : f));
@@ -43,8 +43,6 @@ export default function FetichesPage() {
   const toggleCurious = (id: string) => {
     setFetishes(fetishes.map(f => f.id === id ? { ...f, isCurious: !f.isCurious } : f));
   };
-
-  const selected = fetishes.find(f => f.id === selectedFetish);
 
   return (
     <AppLayout title="Fetiches y Prácticas" icon={<Heart className="w-5 h-5" />}>
@@ -150,5 +148,3 @@ export default function FetichesPage() {
     </AppLayout>
   );
 }
-
-import { AnimatePresence } from "framer-motion";
