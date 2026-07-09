@@ -23,7 +23,7 @@ interface AuthContextType {
   isLoading: boolean;
   needsOnboarding: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, role: UserRole, displayName: string) => Promise<void>;
+  signUp: (email: string, password: string, role: UserRole, displayName: string) => Promise<{ needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
   completeOnboarding: (data: OnboardingData) => Promise<void>;
 }
@@ -94,10 +94,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("[signIn] Login exitoso");
   };
 
-  const signUp = async (email: string, password: string, role: UserRole, displayName: string) => {
+  const signUp = async (email: string, password: string, role: UserRole, displayName: string): Promise<{ needsEmailConfirmation: boolean }> => {
     console.log("[signUp] Registrando:", email, "rol:", role, "nombre:", displayName);
     
-    const { data, error } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -108,35 +108,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     
-    if (error) {
-      console.error("[signUp] Error de auth:", error.message, error.status);
-      throw error;
+    if (signUpError) {
+      console.error("[signUp] Error de auth:", signUpError.message, signUpError.status);
+      throw signUpError;
     }
     
-    console.log("[signUp] Usuario creado en auth:", data.user?.id);
+    console.log("[signUp] Usuario creado en auth:", signUpData.user?.id);
+    console.log("[signUp] Session after signup:", signUpData.session ? "exists" : "null");
 
-    // El perfil se crea automáticamente via trigger, pero hacemos fallback manual
-    if (data.user) {
-      console.log("[signUp] Intentando upsert de perfil manual para:", data.user.id);
+    // Si Supabase creó sesión automáticamente (email confirmation disabled)
+    if (signUpData.session) {
+      setSession(signUpData.session);
+      setUser(signUpData.session.user);
+      
+      // Crear perfil manualmente si el trigger no funcionó
       const { error: profileError } = await supabase.from("profiles").upsert({
-        id: data.user.id,
+        id: signUpData.session.user.id,
         email,
         role: role || "follower",
         display_name: displayName,
       }, { onConflict: "id" });
 
       if (profileError) {
-        console.error("[signUp] Error al crear perfil:", profileError.message, profileError.code, profileError.details);
-      } else {
-        console.log("[signUp] Perfil creado/actualizado exitosamente");
+        console.error("[signUp] Error al crear perfil:", profileError.message);
       }
+      
+      return { needsEmailConfirmation: false };
     }
+
+    // Si no hay sesión, intentar login automático (puede fallar si email confirmation está activado)
+    console.log("[signUp] No session, attempting auto-login...");
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (signInError) {
+      console.log("[signUp] Auto-login failed:", signInError.message);
+      // Probablemente "Email not confirmed" - crear perfil de todos modos para cuando confirme
+      if (signUpData.user) {
+        await supabase.from("profiles").upsert({
+          id: signUpData.user.id,
+          email,
+          role: role || "follower",
+          display_name: displayName,
+        }, { onConflict: "id" });
+      }
+      return { needsEmailConfirmation: true };
+    }
+
+    console.log("[signUp] Auto-login successful");
+    return { needsEmailConfirmation: false };
   };
 
   const completeOnboarding = async (data: OnboardingData) => {
-    if (!user) throw new Error("No hay usuario autenticado");
+    // Obtener el usuario actual de forma robusta
+    let currentUser = user;
     
-    console.log("[completeOnboarding] Iniciando. User:", user.id, "Data:", data);
+    if (!currentUser) {
+      console.log("[completeOnboarding] No user in state, fetching session...");
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession?.user) {
+        currentUser = currentSession.user;
+        setUser(currentUser);
+        setSession(currentSession);
+      }
+    }
+    
+    if (!currentUser) {
+      console.error("[completeOnboarding] No authenticated user found");
+      throw new Error("No hay usuario autenticado. Por favor inicia sesión nuevamente.");
+    }
+    
+    console.log("[completeOnboarding] User:", currentUser.id, "Data:", data);
 
     if (data.cultName) {
       console.log("[completeOnboarding] Creando culto:", data.cultName);
@@ -145,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from("cults")
         .insert({
           name: data.cultName,
-          main_deity_id: user.id,
+          main_deity_id: currentUser.id,
         })
         .select()
         .single();
@@ -165,7 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           is_main_deity: true,
           display_name: data.displayName,
         })
-        .eq("id", user.id);
+        .eq("id", currentUser.id);
 
       if (updateError) {
         console.error("[completeOnboarding] Error al actualizar perfil:", updateError.message, updateError.code);
@@ -173,6 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       console.log("[completeOnboarding] Perfil actualizado como deidad principal");
+      await fetchProfile(currentUser.id);
       
     } else if (data.inviteCode) {
       console.log("[completeOnboarding] Buscando código:", data.inviteCode);
@@ -198,7 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           cult_id: code.creator.cult_id,
           display_name: data.displayName,
         })
-        .eq("id", user.id);
+        .eq("id", currentUser.id);
 
       if (updateError) {
         console.error("[completeOnboarding] Error al actualizar perfil:", updateError.message);
@@ -208,18 +250,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isDeityCode) {
         await supabase.from("hierarchy").insert({
           deity_id: code.creator_id,
-          follower_id: user.id,
+          follower_id: currentUser.id,
           cult_id: code.creator.cult_id,
         });
       }
 
       await supabase
         .from("invitation_codes")
-        .update({ is_active: false, used_by: user.id })
+        .update({ is_active: false, used_by: currentUser.id })
         .eq("id", code.id);
+        
+      await fetchProfile(currentUser.id);
     }
-
-    await fetchProfile(user.id);
   };
 
   const signOut = async () => {
