@@ -191,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     if (existingCult) {
-      // Ya tiene un culto - vincular el perfil a ese culto
+      // Ya tiene un culto - asegurar que el rol sea deity y vincular
       await supabase
         .from("profiles")
         .update({

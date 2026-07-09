@@ -6,6 +6,7 @@ import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 type AuthStep = "landing" | "login" | "signup" | "onboarding";
 
@@ -72,17 +73,23 @@ export default function Home() {
         return;
       }
       
-      // Esperar a que el perfil se cargue
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Si el usuario ya tiene un culto, no mostrar onboarding
-      if (profile?.cult_id) {
-        toast({
-          title: "Bienvenido de vuelta",
-          description: `Ya perteneces a un culto como ${profile?.is_main_deity ? "Deidad Principal" : profile?.role === "deity" ? "Deidad" : "Fiel"}.`,
-        });
-        setStep("landing");
-        return;
+      // Query directa a Supabase — no confiar en el estado de React que puede estar desactualizado
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const { data: currentProfile } = await supabase
+          .from("profiles")
+          .select("cult_id, role, is_main_deity")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+        
+        if (currentProfile?.cult_id) {
+          toast({
+            title: "Bienvenido de vuelta",
+            description: `Ya perteneces a un culto como ${currentProfile.is_main_deity ? "Deidad Principal" : currentProfile.role === "deity" ? "Deidad" : "Fiel"}.`,
+          });
+          setStep("landing");
+          return;
+        }
       }
       
       toast({
