@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/router";
-import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle, Check } from "lucide-react";
+import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle, Check, Wifi, WifiOff } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 type AuthStep = "landing" | "login" | "signup" | "onboarding";
 
@@ -16,9 +17,29 @@ export default function Home() {
   const [displayName, setDisplayName] = useState("");
   const [isOver18, setIsOver18] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [supabaseStatus, setSupabaseStatus] = useState<"checking" | "connected" | "error">("checking");
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+
+  useEffect(() => {
+    const checkSupabase = async () => {
+      try {
+        const { error } = await supabase.from("cults").select("count", { count: "exact", head: true });
+        if (error) {
+          console.error("[Health Check] Supabase error:", error.message, error.code);
+          setSupabaseStatus("error");
+        } else {
+          console.log("[Health Check] Supabase connected successfully");
+          setSupabaseStatus("connected");
+        }
+      } catch (e) {
+        console.error("[Health Check] Exception:", e);
+        setSupabaseStatus("error");
+      }
+    };
+    checkSupabase();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +128,28 @@ export default function Home() {
               para encontrar su verdadero propósito en la sombra&rdquo;
             </p>
           </motion.div>
+
+          {/* Health Check Status */}
+          <div className="flex items-center gap-2 text-xs font-heading">
+            {supabaseStatus === "checking" && (
+              <span className="text-muted-foreground/50 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Verificando conexión...
+              </span>
+            )}
+            {supabaseStatus === "connected" && (
+              <span className="text-gold/60 flex items-center gap-1">
+                <Wifi className="w-3 h-3" />
+                Grimorio conectado
+              </span>
+            )}
+            {supabaseStatus === "error" && (
+              <span className="text-wine flex items-center gap-1">
+                <WifiOff className="w-3 h-3" />
+                Sin conexión al grimorio — verifica configuración
+              </span>
+            )}
+          </div>
 
           {/* Símbolo decorativo */}
           <motion.div
