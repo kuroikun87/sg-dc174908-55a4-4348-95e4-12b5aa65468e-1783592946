@@ -1,30 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-let supabaseInstance;
-
-if (supabaseUrl && supabaseKey) {
-  supabaseInstance = createClient(supabaseUrl, supabaseKey);
-} else {
-  // Mock seguro para desarrollo visual sin credenciales
-  supabaseInstance = {
-    auth: {
-      getSession: async () => ({ data: { session: null }, error: null }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-      signInWithPassword: async () => ({ error: new Error("Supabase no configurado") }),
-      signUp: async () => ({ data: { user: null }, error: new Error("Supabase no configurado") }),
-      signOut: async () => {},
-    },
-    from: () => ({
-      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
-      insert: async () => ({ error: null }),
-    }),
-  } as any;
+if (!supabaseUrl || !supabaseKey) {
+  console.error("[Supabase] Faltan variables de entorno: NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY");
 }
 
-export const supabase = supabaseInstance;
+export const supabase = createClient(
+  supabaseUrl || "http://placeholder",
+  supabaseKey || "placeholder"
+);
 
 export type UserRole = "deity" | "follower" | null;
 

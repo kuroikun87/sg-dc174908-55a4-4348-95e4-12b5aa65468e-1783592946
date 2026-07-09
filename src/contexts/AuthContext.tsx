@@ -46,154 +46,142 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        }
-      } catch {
-        // Supabase no configurado — modo desarrollo visual
-      } finally {
-        setIsLoading(false);
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await fetchProfile(session.user.id);
       }
+      setIsLoading(false);
     };
 
     getSession();
 
-    try {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchProfile(session.user.id);
-        } else {
-          setProfile(null);
-        }
-      });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+      }
+    });
 
-      return () => subscription.unsubscribe();
-    } catch {
-      // Supabase no configurado
-    }
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
 
-      if (!error && data) {
-        setProfile(data as UserProfile);
-      }
-    } catch {
-      // Error silencioso en modo desarrollo
+    if (error) {
+      console.error("[fetchProfile]", error.message);
+    } else if (data) {
+      setProfile(data as UserProfile);
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-    } catch (e) {
-      throw new Error("Supabase no está configurado. Agrega las variables de entorno en la configuración de Softgen.");
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   };
 
   const signUp = async (email: string, password: string, role: UserRole, displayName: string) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-
-      if (data.user) {
-        await supabase.from("profiles").insert({
-          id: data.user.id,
-          email,
-          role,
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
           display_name: displayName,
-        });
+          role: role || "follower",
+        },
+      },
+    });
+    if (error) throw error;
+
+    // El perfil se crea automáticamente via trigger en Supabase
+    // Pero si el trigger no está configurado, podemos intentar crearlo manualmente
+    if (data.user) {
+      const { error: profileError } = await supabase.from("profiles").upsert({
+        id: data.user.id,
+        email,
+        role: role || "follower",
+        display_name: displayName,
+      }, { onConflict: "id" });
+
+      if (profileError) {
+        console.error("[signUp] profile upsert:", profileError.message);
       }
-    } catch (e) {
-      throw new Error("Supabase no está configurado. Agrega las variables de entorno en la configuración de Softgen.");
     }
   };
 
   const completeOnboarding = async (data: OnboardingData) => {
     if (!user) throw new Error("No hay usuario autenticado");
 
-    try {
-      if (data.cultName) {
-        const { data: cult, error: cultError } = await supabase
-          .from("cults")
-          .insert({
-            name: data.cultName,
-            main_deity_id: user.id,
-          })
-          .select()
-          .single();
+    if (data.cultName) {
+      const { data: cult, error: cultError } = await supabase
+        .from("cults")
+        .insert({
+          name: data.cultName,
+          main_deity_id: user.id,
+        })
+        .select()
+        .single();
 
-        if (cultError) throw cultError;
+      if (cultError) throw cultError;
 
-        await supabase
-          .from("profiles")
-          .update({
-            role: "deity",
-            cult_id: cult.id,
-            is_main_deity: true,
-            display_name: data.displayName,
-          })
-          .eq("id", user.id);
-      } else if (data.inviteCode) {
-        const { data: code, error: codeError } = await supabase
-          .from("invitation_codes")
-          .select("*, creator:creator_id(role, cult_id)")
-          .eq("code", data.inviteCode.toUpperCase())
-          .eq("is_active", true)
-          .single();
+      await supabase
+        .from("profiles")
+        .update({
+          role: "deity",
+          cult_id: cult.id,
+          is_main_deity: true,
+          display_name: data.displayName,
+        })
+        .eq("id", user.id);
+    } else if (data.inviteCode) {
+      const { data: code, error: codeError } = await supabase
+        .from("invitation_codes")
+        .select("*, creator:creator_id(role, cult_id)")
+        .eq("code", data.inviteCode.toUpperCase())
+        .eq("is_active", true)
+        .single();
 
-        if (codeError || !code) throw new Error("Código inválido o expirado");
+      if (codeError || !code) throw new Error("Código inválido o expirado");
 
-        const isDeityCode = code.code_type === "deity";
-        
-        await supabase
-          .from("profiles")
-          .update({
-            role: isDeityCode ? "deity" : "follower",
-            cult_id: code.creator.cult_id,
-            display_name: data.displayName,
-          })
-          .eq("id", user.id);
+      const isDeityCode = code.code_type === "deity";
 
-        if (!isDeityCode) {
-          await supabase.from("hierarchy").insert({
-            deity_id: code.creator_id,
-            follower_id: user.id,
-            cult_id: code.creator.cult_id,
-          });
-        }
+      await supabase
+        .from("profiles")
+        .update({
+          role: isDeityCode ? "deity" : "follower",
+          cult_id: code.creator.cult_id,
+          display_name: data.displayName,
+        })
+        .eq("id", user.id);
 
-        await supabase
-          .from("invitation_codes")
-          .update({ is_active: false, used_by: user.id })
-          .eq("id", code.id);
+      if (!isDeityCode) {
+        await supabase.from("hierarchy").insert({
+          deity_id: code.creator_id,
+          follower_id: user.id,
+          cult_id: code.creator.cult_id,
+        });
       }
 
-      await fetchProfile(user.id);
-    } catch (e) {
-      throw new Error("Error en el ritual de incorporación: " + (e instanceof Error ? e.message : "desconocido"));
+      await supabase
+        .from("invitation_codes")
+        .update({ is_active: false, used_by: user.id })
+        .eq("id", code.id);
     }
+
+    await fetchProfile(user.id);
   };
 
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Silencioso
-    }
+    await supabase.auth.signOut();
     setProfile(null);
     setUser(null);
     setSession(null);
