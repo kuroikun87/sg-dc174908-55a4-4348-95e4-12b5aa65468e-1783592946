@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/router";
 import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle, Check } from "lucide-react";
@@ -16,9 +16,22 @@ export default function Home() {
   const [displayName, setDisplayName] = useState("");
   const [isOver18, setIsOver18] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, profile, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+
+  // Auto-detectar estado de autenticación y redirigir apropiadamente
+  useEffect(() => {
+    if (authLoading) return;
+    
+    if (user && !profile?.cult_id) {
+      // Usuario logueado pero sin culto → mostrar onboarding
+      setStep("onboarding");
+    } else if (user && profile?.cult_id) {
+      // Usuario logueado con culto → ir al dashboard
+      router.push("/dashboard");
+    }
+  }, [authLoading, user, profile, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
