@@ -192,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (existingCult) {
       // Ya tiene un culto - asegurar que el rol sea deity y vincular
-      await supabase
+      const { error: updateError } = await supabase
         .from("profiles")
         .update({
           role: "deity",
@@ -201,6 +201,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           display_name: data.displayName,
         })
         .eq("id", currentUser.id);
+      
+      if (updateError) {
+        throw new Error(`Error al vincular perfil al culto existente: ${updateError.message}`);
+      }
       
       await fetchProfile(currentUser.id);
       return;
