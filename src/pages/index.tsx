@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/router";
-import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle } from "lucide-react";
+import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle, Check } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Check } from "lucide-react";
 
 type AuthStep = "landing" | "login" | "signup" | "onboarding";
 
@@ -286,7 +285,7 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Checkbox +18 - AHORA CON VALIDACIÓN ESTRICTA */}
+                {/* Checkbox +18 */}
                 <div className={`p-4 rounded-sm border transition-all ${isOver18 ? 'bg-gold/5 border-gold/30' : 'bg-wine/5 border-wine/30'}`}>
                   <div className="flex items-start gap-3">
                     <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isOver18 ? 'text-gold' : 'text-wine'}`} />
@@ -356,7 +355,7 @@ export default function Home() {
             )}
 
             {step === "onboarding" && (
-              <OnboardingFlow />
+              <OnboardingFlow displayName={displayName} />
             )}
           </AnimatePresence>
 
@@ -379,29 +378,63 @@ export default function Home() {
   );
 }
 
-function OnboardingFlow() {
+function OnboardingFlow({ displayName }: { displayName: string }) {
   const [onboardingStep, setOnboardingStep] = useState<"choice" | "create-cult" | "join-cult">("choice");
   const [cultName, setCultName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { completeOnboarding } = useAuth();
 
   const createCult = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Culto creado",
-      description: `El culto "${cultName}" ha sido fundado. Eres la Deidad Principal.`,
-    });
-    router.push("/dashboard");
+    if (!cultName.trim()) {
+      toast({ title: "Error", description: "El nombre del culto es requerido", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await completeOnboarding({ cultName: cultName.trim(), displayName });
+      toast({
+        title: "Culto creado",
+        description: `El culto "${cultName}" ha sido fundado. Eres la Deidad Principal.`,
+      });
+      router.push("/dashboard");
+    } catch (error) {
+      toast({
+        title: "Error al crear el culto",
+        description: error instanceof Error ? error.message : "Falló el ritual de fundación",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const joinCult = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Código verificado",
-      description: "Has sido admitido en el culto.",
-    });
-    router.push("/dashboard");
+    if (!inviteCode.trim()) {
+      toast({ title: "Error", description: "El código de invitación es requerido", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await completeOnboarding({ inviteCode: inviteCode.trim(), displayName });
+      toast({
+        title: "Bienvenido al culto",
+        description: "Has sido admitido. Que los ritmos te guíen.",
+      });
+      router.push("/dashboard");
+    } catch (error) {
+      toast({
+        title: "Error al unirse",
+        description: error instanceof Error ? error.message : "El código no es válido o ha expirado",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -479,6 +512,7 @@ function OnboardingFlow() {
               value={cultName}
               onChange={(e) => setCultName(e.target.value)}
               required
+              disabled={isLoading}
               className="w-full bg-background/50 border border-border rounded-sm px-4 py-3
                          text-foreground font-body placeholder:text-muted-foreground/50
                          focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/20
@@ -487,12 +521,13 @@ function OnboardingFlow() {
             />
           </div>
 
-          <RitualButton type="submit" variant="gold" className="w-full">
-            Fundar Culto
+          <RitualButton type="submit" variant="gold" className="w-full" disabled={isLoading}>
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Fundar Culto"}
           </RitualButton>
 
           <button
             type="button"
+            disabled={isLoading}
             onClick={() => setOnboardingStep("choice")}
             className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors font-body pt-2"
           >
@@ -527,6 +562,7 @@ function OnboardingFlow() {
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
               required
+              disabled={isLoading}
               className="w-full bg-background/50 border border-border rounded-sm px-4 py-3
                          text-foreground font-body placeholder:text-muted-foreground/50
                          focus:outline-none focus:border-wine/50 focus:ring-1 focus:ring-wine/20
@@ -538,12 +574,13 @@ function OnboardingFlow() {
             </p>
           </div>
 
-          <RitualButton type="submit" variant="wine" className="w-full">
-            Unirse al Culto
+          <RitualButton type="submit" variant="wine" className="w-full" disabled={isLoading}>
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Unirse al Culto"}
           </RitualButton>
 
           <button
             type="button"
+            disabled={isLoading}
             onClick={() => setOnboardingStep("choice")}
             className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors font-body pt-2"
           >
