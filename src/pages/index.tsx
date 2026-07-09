@@ -138,7 +138,52 @@ export default function Home() {
           />
 
           <AnimatePresence mode="wait">
-            {step === "landing" && (
+            {/* SESIÓN ACTIVA - usuario logueado con culto */}
+            {user && profile?.cult_id && step === "landing" && (
+              <motion.div
+                key="active-session"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="w-full space-y-6"
+              >
+                <div className="p-6 bg-card/60 border border-gold/30 rounded-sm space-y-4">
+                  <Crown className="w-8 h-8 text-gold mx-auto" />
+                  <h2 className="font-heading text-xl text-foreground">Sesión Activa</h2>
+                  <p className="font-body text-sm text-muted-foreground">
+                    Ya perteneces a un culto como{" "}
+                    <span className="text-gold">
+                      {profile?.is_main_deity ? "Deidad Principal" : profile?.role === "deity" ? "Deidad" : "Fiel"}
+                    </span>
+                  </p>
+                  
+                  <div className="space-y-3 pt-2">
+                    <RitualButton
+                      variant="gold"
+                      className="w-full"
+                      onClick={() => router.push("/dashboard")}
+                    >
+                      Ir al Dashboard
+                    </RitualButton>
+                    
+                    <button
+                      onClick={async () => {
+                        await signOut();
+                        toast({
+                          title: "Sesión cerrada",
+                          description: "Puedes crear una nueva cuenta o entrar con otra.",
+                        });
+                      }}
+                      className="w-full py-3 text-muted-foreground hover:text-wine transition-colors font-body text-sm"
+                    >
+                      Cerrar sesión y empezar de nuevo
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {step === "landing" && !(user && profile?.cult_id) && (
               <motion.div
                 key="landing"
                 initial={{ opacity: 0, y: 20 }}
