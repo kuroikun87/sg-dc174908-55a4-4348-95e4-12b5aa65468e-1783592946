@@ -16,7 +16,7 @@ export default function Home() {
   const [displayName, setDisplayName] = useState("");
   const [isOver18, setIsOver18] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, signUp, user, profile, isLoading: authLoading } = useAuth();
+  const { signIn, signUp, signOut, user, profile, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -81,7 +81,7 @@ export default function Home() {
           title: "Bienvenido de vuelta",
           description: `Ya perteneces a un culto como ${profile?.is_main_deity ? "Deidad Principal" : profile?.role === "deity" ? "Deidad" : "Fiel"}.`,
         });
-        // La pantalla de sesión activa se mostrará automáticamente
+        setStep("landing");
         return;
       }
       
