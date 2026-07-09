@@ -6,7 +6,7 @@ import "@/styles/globals.css";
 
 function AppRoutes({ Component, pageProps }: { Component: any; pageProps: any }) {
   const router = useRouter();
-  const { user, isLoading, needsOnboarding } = useAuth();
+  const { user, isLoading } = useAuth();
 
   useEffect(() => {
     if (isLoading) return;
@@ -14,14 +14,11 @@ function AppRoutes({ Component, pageProps }: { Component: any; pageProps: any })
     const publicPaths = ["/", "/onboarding"];
     const isPublic = publicPaths.includes(router.pathname);
 
+    // Solo proteger rutas privadas: si no hay usuario y la ruta es privada, redirigir a /
     if (!user && !isPublic) {
-      router.push("/");
-    } else if (user && needsOnboarding && router.pathname !== "/onboarding") {
-      router.push("/onboarding");
-    } else if (user && !needsOnboarding && isPublic) {
-      router.push("/dashboard");
+      router.replace("/");
     }
-  }, [user, isLoading, needsOnboarding, router]);
+  }, [user, isLoading, router.pathname]);
 
   return <Component {...pageProps} />;
 }
