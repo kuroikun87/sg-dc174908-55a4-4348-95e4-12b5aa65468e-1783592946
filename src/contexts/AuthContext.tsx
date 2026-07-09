@@ -101,54 +101,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     
-    if (signUpError) throw signUpError;
+    if (signUpError) {
+      // Si Supabase dice que ya existe, dar mensaje claro
+      if (signUpError.message.includes("already registered") || signUpError.message.includes("already exists")) {
+        throw new Error("Este email ya está registrado. Usá 'Entrar al Culto' en lugar de 'Crear cuenta'.");
+      }
+      throw signUpError;
+    }
 
-    // Si no hay sesión ni usuario, algo falló
     if (!signUpData.user) {
       throw new Error("No se pudo crear la cuenta");
     }
 
-    // Si no hay sesión pero sí usuario, puede ser que el email ya esté registrado
-    // Supabase con confirmación desactivada debería crear sesión inmediatamente
+    // Con confirmación de email DESACTIVADA, Supabase debería devolver sesión inmediatamente
+    // Si NO hay sesión, el usuario probablemente ya existe
     if (!signUpData.session) {
-      // Intentar login para verificar si la cuenta ya existe
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (!signInError) {
-        // Login funcionó con la contraseña nueva → la cuenta fue creada pero no hubo sesión
-        const { data: { session: s } } = await supabase.auth.getSession();
-        if (s) {
-          setSession(s);
-          setUser(s.user);
-        }
-        return { needsEmailConfirmation: false };
-      }
-      
-      // Login falló → la cuenta ya existe pero con otra contraseña
-      throw new Error("Este email ya está registrado. Usa 'Entrar al Culto' en lugar de 'Crear cuenta'.");
+      throw new Error("Este email ya está registrado. Usá 'Entrar al Culto' en lugar de 'Crear cuenta'.");
     }
 
-    // Sesión creada exitosamente → usuario nuevo
+    // Usuario NUEVO creado exitosamente con sesión
     setSession(signUpData.session);
     setUser(signUpData.session.user);
     
-    const { data: existingProfile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", signUpData.session.user.id)
-      .maybeSingle();
-    
-    if (!existingProfile) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: signUpData.session.user.id,
-        email,
-        role: role || "follower",
-        display_name: displayName,
-      });
+    // Crear perfil automáticamente
+    const { error: profileError } = await supabase.from("profiles").insert({
+      id: signUpData.session.user.id,
+      email,
+      role: role || "follower",
+      display_name: displayName,
+    });
 
-      if (profileError) {
-        console.error("[signUp] Error al crear perfil:", profileError.message);
-      }
+    if (profileError) {
+      console.error("[signUp] Error al crear perfil:", profileError.message);
     }
     
     return { needsEmailConfirmation: false };
@@ -270,7 +254,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("[signOut] Error:", error.message);
+    }
+    // Limpiar estado siempre, incluso si supabase falla
     setProfile(null);
     setUser(null);
     setSession(null);
