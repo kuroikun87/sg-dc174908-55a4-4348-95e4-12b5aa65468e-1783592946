@@ -453,7 +453,8 @@ function OnboardingFlow({ displayName }: { displayName: string }) {
         title: "Culto creado",
         description: `El culto "${cultName}" ha sido fundado. Eres la Deidad Principal.`,
       });
-      router.push("/dashboard");
+      // Forzar recarga completa para evitar race conditions del estado
+      window.location.href = "/dashboard";
     } catch (error) {
       toast({
         title: "Error al crear el culto",
@@ -478,7 +479,7 @@ function OnboardingFlow({ displayName }: { displayName: string }) {
         title: "Bienvenido al culto",
         description: "Has sido admitido. Que los ritmos te guíen.",
       });
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (error) {
       toast({
         title: "Error al unirse",

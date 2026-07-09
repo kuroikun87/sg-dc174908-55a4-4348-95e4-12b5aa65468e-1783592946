@@ -21,7 +21,9 @@ export default function Dashboard() {
   }
 
   if (!user) {
-    router.push("/");
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
     return null;
   }
 
