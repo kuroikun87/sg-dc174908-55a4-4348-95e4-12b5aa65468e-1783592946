@@ -3,10 +3,28 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-// Cliente real si hay credenciales, o mock para desarrollo visual
-export const supabase = supabaseUrl && supabaseKey
-  ? createClient(supabaseUrl, supabaseKey)
-  : createClient("http://localhost:54321", "anon-key");
+let supabaseInstance;
+
+if (supabaseUrl && supabaseKey) {
+  supabaseInstance = createClient(supabaseUrl, supabaseKey);
+} else {
+  // Mock seguro para desarrollo visual sin credenciales
+  supabaseInstance = {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      signInWithPassword: async () => ({ error: new Error("Supabase no configurado") }),
+      signUp: async () => ({ data: { user: null }, error: new Error("Supabase no configurado") }),
+      signOut: async () => {},
+    },
+    from: () => ({
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
+      insert: async () => ({ error: null }),
+    }),
+  } as any;
+}
+
+export const supabase = supabaseInstance;
 
 export type UserRole = "deity" | "follower" | null;
 

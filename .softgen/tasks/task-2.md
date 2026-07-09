@@ -1,6 +1,6 @@
 ---
 title: Autenticación y Selección de Rol
-status: todo
+status: in_progress
 priority: urgent
 type: feature
 tags: [auth, supabase, roles]
@@ -11,18 +11,23 @@ position: 2
 
 ## Notes
 
-Pantalla de entrada con dos opciones: Deidad o Fiel. Sistema de autenticación con Supabase Auth. Al elegir un rol, se redirige al dashboard correspondiente.
+Implementar el sistema de autenticación dual:
+- Login/Signup con Supabase Auth
+- Selección de rol (Deidad/Fiel) durante registro
+- Protección de rutas según rol
+- Perfiles de usuario en tabla profiles
 
 ## Checklist
 
-- [ ] Crear pantalla de selección de rol con diseño ritualista
-- [ ] Configurar Supabase Auth (signup/login)
-- [ ] Crear contexto de autenticación y rol de usuario
-- [ ] Proteger rutas según rol
-- [ ] Crear pantalla de login/signup estilizada
+- [x] Landing page con selección visual de rol
+- [x] Formularios de login/signup estilizados
+- [x] Contexto de autenticación React
+- [ ] Configurar tabla profiles en Supabase
+- [ ] Políticas RLS para seguridad
+- [ ] Redirección post-login según rol
 
 ## Acceptance
 
-- [ ] El usuario puede elegir entre Deidad o Fiel al entrar
-- [ ] El sistema de login/signup funciona con Supabase
+- [x] El usuario puede elegir entre Deidad y Fiel
+- [x] El sistema de login/signup funciona con Supabase
 - [ ] Las rutas están protegidas según el rol
