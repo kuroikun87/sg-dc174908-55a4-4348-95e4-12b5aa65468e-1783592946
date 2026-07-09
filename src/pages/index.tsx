@@ -20,18 +20,16 @@ export default function Home() {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Auto-detectar estado de autenticación y redirigir apropiadamente
+  // Auto-detectar estado de autenticación
   useEffect(() => {
     if (authLoading) return;
     
     if (user && !profile?.cult_id) {
       // Usuario logueado pero sin culto → mostrar onboarding
       setStep("onboarding");
-    } else if (user && profile?.cult_id) {
-      // Usuario logueado con culto → ir al dashboard
-      router.push("/dashboard");
     }
-  }, [authLoading, user, profile, router]);
+    // Si user && profile?.cult_id, mostramos la pantalla de sesión activa (ver JSX abajo)
+  }, [authLoading, user, profile]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +37,6 @@ export default function Home() {
     try {
       await signIn(email, password);
       toast({ title: "Bienvenido", description: "Has entrado al grimorio." });
-      // La navegación la maneja el useEffect automáticamente
     } catch (error) {
       toast({
         title: "Error",
@@ -75,18 +72,8 @@ export default function Home() {
         return;
       }
       
-      // Esperar a que el perfil se cargue en el estado
+      // Esperar a que el perfil se cargue
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Si el usuario ya tiene un culto (mismo email usado antes), ir al dashboard
-      if (profile?.cult_id) {
-        toast({
-          title: "Bienvenido de vuelta",
-          description: "Ya perteneces a un culto.",
-        });
-        await router.push("/dashboard");
-        return;
-      }
       
       toast({
         title: "Cuenta creada",
@@ -94,11 +81,20 @@ export default function Home() {
       });
       setStep("onboarding");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "No se pudo completar el ritual",
-        variant: "destructive",
-      });
+      const msg = error instanceof Error ? error.message : "";
+      if (msg.includes("User already registered")) {
+        toast({
+          title: "Cuenta existente",
+          description: "Este email ya tiene una cuenta. Intenta iniciar sesión en su lugar.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: msg || "No se pudo completar el ritual",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
