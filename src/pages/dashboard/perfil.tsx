@@ -22,60 +22,60 @@ export default function Perfil() {
     }
     setIsLeaving(true);
     
-    // Primero: intentar borrar el culto si soy deidad principal
-    const { data: myCult } = await supabase
-      .from("cults")
-      .select("id")
-      .eq("main_deity_id", user.id)
-      .maybeSingle();
-    
-    if (myCult?.id) {
-      // Borrar culto primero para evitar FK constraints
-      await supabase.from("cults").delete().eq("id", myCult.id);
-    }
-    
-    // Luego: actualizar perfil
-    const { data: updatedProfile, error } = await supabase
-      .from("profiles")
-      .update({ cult_id: null, role: null, is_main_deity: false, title: null })
-      .eq("id", user.id)
-      .select();
-    
-    if (error) {
+    try {
+      // Paso 1: Borrar el culto si soy deidad principal
+      const { data: myCult } = await supabase
+        .from("cults")
+        .select("id")
+        .eq("main_deity_id", user.id)
+        .maybeSingle();
+      
+      if (myCult?.id) {
+        const { error: deleteCultError } = await supabase.from("cults").delete().eq("id", myCult.id);
+        if (deleteCultError) {
+          throw new Error(`Error al borrar culto: ${deleteCultError.message}`);
+        }
+      }
+      
+      // Paso 2: Actualizar perfil
+      const { data: updatedProfile, error: updateError } = await supabase
+        .from("profiles")
+        .update({ cult_id: null, role: null, is_main_deity: false, title: null })
+        .eq("id", user.id)
+        .select();
+      
+      if (updateError) {
+        throw new Error(`Error al actualizar perfil: ${updateError.message}`);
+      }
+      
+      if (!updatedProfile || updatedProfile.length === 0) {
+        throw new Error("No se pudo actualizar el perfil");
+      }
+      
+      // Paso 3: Cerrar sesión en Supabase
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        throw new Error(`Error al cerrar sesión: ${signOutError.message}`);
+      }
+      
+      // Paso 4: Limpiar estado local y navegar
+      toast({
+        title: "Has abandonado el culto",
+        description: "Tu sesión ha sido cerrada.",
+      });
+      
+      await router.push("/");
+      
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Error desconocido";
       toast({
         title: "Error al abandonar",
-        description: error.message,
+        description: msg,
         variant: "destructive",
       });
+    } finally {
       setIsLeaving(false);
-      return;
     }
-    
-    if (!updatedProfile || updatedProfile.length === 0) {
-      toast({
-        title: "Error al abandonar",
-        description: "No se encontró el perfil para actualizar. Es posible que ya haya sido eliminado.",
-        variant: "destructive",
-      });
-      setIsLeaving(false);
-      return;
-    }
-    
-    // Éxito: limpiar estado y redirigir
-    toast({
-      title: "Has abandonado el culto",
-      description: "Tu sesión ha sido cerrada.",
-    });
-    
-    // Limpiar estado de auth inmediatamente
-    await signOut();
-    
-    // Forzar recarga completa para limpiar todo el estado de React
-    if (typeof window !== "undefined") {
-      window.location.href = "/";
-    }
-    
-    setIsLeaving(false);
   };
 
   return (
