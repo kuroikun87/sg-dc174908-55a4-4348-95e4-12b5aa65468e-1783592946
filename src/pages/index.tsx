@@ -39,11 +39,20 @@ export default function Home() {
       await signIn(email, password);
       toast({ title: "Bienvenido", description: "Has entrado al grimorio." });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Falló el ritual de entrada",
-        variant: "destructive",
-      });
+      const msg = error instanceof Error ? error.message : "";
+      if (msg.includes("Invalid login credentials")) {
+        toast({
+          title: "Credenciales inválidas",
+          description: "Email o contraseña incorrectos. Si es tu primera vez, usá 'Crear cuenta' en lugar de 'Entrar'.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: msg || "Falló el ritual de entrada",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

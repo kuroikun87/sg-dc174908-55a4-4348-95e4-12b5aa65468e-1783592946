@@ -22,10 +22,24 @@ export default function Perfil() {
     }
     setIsLeaving(true);
     
-    const { error } = await supabase
+    // Primero: intentar borrar el culto si soy deidad principal
+    const { data: myCult } = await supabase
+      .from("cults")
+      .select("id")
+      .eq("main_deity_id", user.id)
+      .maybeSingle();
+    
+    if (myCult?.id) {
+      // Borrar culto primero para evitar FK constraints
+      await supabase.from("cults").delete().eq("id", myCult.id);
+    }
+    
+    // Luego: actualizar perfil
+    const { data: updatedProfile, error } = await supabase
       .from("profiles")
-      .update({ cult_id: null, role: null, is_main_deity: false })
-      .eq("id", user.id);
+      .update({ cult_id: null, role: null, is_main_deity: false, title: null })
+      .eq("id", user.id)
+      .select();
     
     if (error) {
       toast({
@@ -37,14 +51,30 @@ export default function Perfil() {
       return;
     }
     
-    // Éxito: cerrar sesión y redirigir
+    if (!updatedProfile || updatedProfile.length === 0) {
+      toast({
+        title: "Error al abandonar",
+        description: "No se encontró el perfil para actualizar. Es posible que ya haya sido eliminado.",
+        variant: "destructive",
+      });
+      setIsLeaving(false);
+      return;
+    }
+    
+    // Éxito: limpiar estado y redirigir
     toast({
       title: "Has abandonado el culto",
       description: "Tu sesión ha sido cerrada.",
     });
     
+    // Limpiar estado de auth inmediatamente
     await signOut();
-    router.push("/");
+    
+    // Forzar recarga completa para limpiar todo el estado de React
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
+    
     setIsLeaving(false);
   };
 
