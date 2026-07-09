@@ -21,10 +21,11 @@ export default function Dashboard() {
   }
 
   if (!user) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/";
-    }
-    return null;
+    return (
+      <main className="min-h-screen bg-background parchment-texture flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-gold animate-spin" />
+      </main>
+    );
   }
 
   return (
