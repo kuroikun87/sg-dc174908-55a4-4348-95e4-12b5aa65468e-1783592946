@@ -2,6 +2,19 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase, type UserRole, type UserProfile } from "@/lib/supabase";
 import type { User, Session } from "@supabase/supabase-js";
 
+export type { UserProfile, UserRole };
+
+export interface InvitationCode {
+  id: string;
+  code: string;
+  code_type: "deity" | "follower";
+  creator_id: string;
+  cult_id: string;
+  is_active: boolean;
+  used_by: string | null;
+  created_at: string;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -114,7 +127,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       if (data.cultName) {
-        // Crear culto nuevo
         const { data: cult, error: cultError } = await supabase
           .from("cults")
           .insert({
@@ -126,7 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (cultError) throw cultError;
 
-        // Actualizar perfil como deidad principal
         await supabase
           .from("profiles")
           .update({
@@ -137,11 +148,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           })
           .eq("id", user.id);
       } else if (data.inviteCode) {
-        // Unirse con código
         const { data: code, error: codeError } = await supabase
           .from("invitation_codes")
-          .select("*, profiles!creator_id(role, cult_id)")
-          .eq("code", data.inviteCode)
+          .select("*, creator:creator_id(role, cult_id)")
+          .eq("code", data.inviteCode.toUpperCase())
           .eq("is_active", true)
           .single();
 
@@ -153,21 +163,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .from("profiles")
           .update({
             role: isDeityCode ? "deity" : "follower",
-            cult_id: code.profiles.cult_id,
+            cult_id: code.creator.cult_id,
             display_name: data.displayName,
           })
           .eq("id", user.id);
 
         if (!isDeityCode) {
-          // Crear jerarquía: fiel bajo la deidad del código
           await supabase.from("hierarchy").insert({
             deity_id: code.creator_id,
             follower_id: user.id,
-            cult_id: code.profiles.cult_id,
+            cult_id: code.creator.cult_id,
           });
         }
 
-        // Desactivar código de un solo uso
         await supabase
           .from("invitation_codes")
           .update({ is_active: false, used_by: user.id })

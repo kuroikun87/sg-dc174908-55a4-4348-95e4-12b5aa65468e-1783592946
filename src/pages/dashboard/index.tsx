@@ -1,10 +1,11 @@
 import React from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { ParchmentCard } from "@/components/ui/parchment-card";
-import { Crown, Heart, Scroll, Users, Star, Settings, LogOut, Loader2 } from "lucide-react";
+import { Crown, Heart, Scroll, Users, Star, Settings, LogOut, Loader2, Key } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
@@ -72,6 +73,7 @@ function DeityMenu() {
     { icon: <Scroll className="w-5 h-5" />, title: "Notas", desc: "Apuntes personales", href: "/dashboard/notas" },
     { icon: <Settings className="w-5 h-5" />, title: "Sesión", desc: "Beats, tarjetas y control", href: "/dashboard/sesion" },
     { icon: <Users className="w-5 h-5" />, title: "Perfil", desc: "Mis datos y configuración", href: "/dashboard/perfil" },
+    { icon: <Key className="w-5 h-5" />, title: "Códigos", desc: "Invitar nuevos miembros", href: "/dashboard/codigos" },
   ];
 
   return (
@@ -83,7 +85,7 @@ function DeityMenu() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.05 }}
         >
-          <a href={item.href}>
+          <Link href={item.href} className="block">
             <ParchmentCard
               title={item.title}
               icon={item.icon}
@@ -91,7 +93,7 @@ function DeityMenu() {
             >
               <p className="text-sm text-muted-foreground">{item.desc}</p>
             </ParchmentCard>
-          </a>
+          </Link>
         </motion.div>
       ))}
     </>
@@ -119,7 +121,7 @@ function FollowerMenu() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.05 }}
         >
-          <a href={item.href}>
+          <Link href={item.href} className="block">
             <ParchmentCard
               title={item.title}
               icon={item.icon}
@@ -127,7 +129,7 @@ function FollowerMenu() {
             >
               <p className="text-sm text-muted-foreground">{item.desc}</p>
             </ParchmentCard>
-          </a>
+          </Link>
         </motion.div>
       ))}
     </>
