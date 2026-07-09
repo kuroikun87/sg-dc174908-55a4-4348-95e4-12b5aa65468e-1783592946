@@ -23,64 +23,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        }
+      } catch {
+        // Supabase no configurado — modo desarrollo visual
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+      });
 
-    return () => subscription.unsubscribe();
+      return () => subscription.unsubscribe();
+    } catch {
+      // Supabase no configurado
+    }
   }, []);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
 
-    if (!error && data) {
-      setProfile(data as UserProfile);
+      if (!error && data) {
+        setProfile(data as UserProfile);
+      }
+    } catch {
+      // Error silencioso en modo desarrollo
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    } catch (e) {
+      throw new Error("Supabase no está configurado. Agrega las variables de entorno en la configuración de Softgen.");
+    }
   };
 
   const signUp = async (email: string, password: string, role: UserRole, displayName: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
 
-    if (data.user) {
-      await supabase.from("profiles").insert({
-        id: data.user.id,
-        email,
-        role,
-        display_name: displayName,
-      });
+      if (data.user) {
+        await supabase.from("profiles").insert({
+          id: data.user.id,
+          email,
+          role,
+          display_name: displayName,
+        });
+      }
+    } catch (e) {
+      throw new Error("Supabase no está configurado. Agrega las variables de entorno en la configuración de Softgen.");
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Silencioso
+    }
     setProfile(null);
+    setUser(null);
+    setSession(null);
   };
 
   return (
