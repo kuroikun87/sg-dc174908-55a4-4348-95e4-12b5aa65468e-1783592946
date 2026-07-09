@@ -61,6 +61,23 @@ const config: Config = {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        wine: {
+          DEFAULT: "hsl(350 60% 35%)",
+          light: "hsl(350 60% 45%)",
+          dark: "hsl(350 60% 25%)",
+        },
+        gold: {
+          DEFAULT: "hsl(43 70% 55%)",
+          light: "hsl(43 70% 65%)",
+          dark: "hsl(43 70% 45%)",
+        },
+        parchment: "hsl(40 30% 88%)",
+        charcoal: "hsl(30 20% 6%)",
+      },
+      fontFamily: {
+        display: ["Cinzel Decorative", "Cinzel", "Georgia", "serif"],
+        heading: ["Cinzel", "Georgia", "serif"],
+        body: ["EB Garamond", "Georgia", "serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -69,25 +86,39 @@ const config: Config = {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "candle-flicker": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.85" },
+          "25%": { opacity: "0.95" },
+          "75%": { opacity: "0.9" },
+        },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(20px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "page-turn": {
+          "0%": { transform: "rotateY(-90deg)", opacity: "0" },
+          "100%": { transform: "rotateY(0deg)", opacity: "1" },
+        },
+        "pulse-gold": {
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(43 70% 55% / 0.4)" },
+          "50%": { boxShadow: "0 0 0 8px hsl(43 70% 55% / 0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "candle-flicker": "candle-flicker 3s ease-in-out infinite",
+        "fade-in-up": "fade-in-up 0.6s ease-out forwards",
+        "page-turn": "page-turn 0.5s ease-out forwards",
+        "pulse-gold": "pulse-gold 2s ease-in-out infinite",
       },
     },
   },
