@@ -87,7 +87,7 @@ export default function CodigosPage() {
   const filteredCodes = codes.filter(c => c.code_type === activeTab);
 
   return (
-    <AppLayout>
+    <AppLayout title="Códigos de Invitación">
       <BookPage pageKey="codigos">
         <div className="space-y-6">
           {/* Header */}

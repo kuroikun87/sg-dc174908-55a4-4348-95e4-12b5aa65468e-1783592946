@@ -36,5 +36,6 @@ export interface UserProfile {
   avatar_url: string | null;
   title: string | null;
   cult_id: string | null;
+  is_main_deity: boolean;
   created_at: string;
 }
