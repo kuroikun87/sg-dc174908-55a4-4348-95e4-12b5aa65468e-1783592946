@@ -120,11 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     if (existingProfile) {
-      // Usuario EXISTENTE - Supabase hizo auto-login
-      // La contraseña NO se cambió, mantener la original
+      // Usuario EXISTENTE - invalidar sesión auto-creada por Supabase
       if (signUpData.session) {
-        setSession(signUpData.session);
-        setUser(signUpData.session.user);
+        await supabase.auth.signOut();
       }
       throw new Error("Este email ya está registrado. Usá 'Entrar al Culto' con tu contraseña original.");
     }

@@ -23,51 +23,28 @@ export default function Perfil() {
     setIsLeaving(true);
     
     try {
-      // Paso 1: Borrar el culto si soy deidad principal
-      const { data: myCult } = await supabase
-        .from("cults")
-        .select("id")
-        .eq("main_deity_id", user.id)
-        .maybeSingle();
-      
-      if (myCult?.id) {
-        const { error: deleteCultError } = await supabase.from("cults").delete().eq("id", myCult.id);
-        if (deleteCultError) {
-          throw new Error(`Error al borrar culto: ${deleteCultError.message}`);
-        }
-      }
-      
-      // Paso 2: Actualizar perfil
-      const { data: updatedProfile, error: updateError } = await supabase
+      // Solo actualizar el perfil - NO intentar borrar el culto (evita problemas de foreign keys)
+      const { error } = await supabase
         .from("profiles")
         .update({ cult_id: null, role: null, is_main_deity: false, title: null })
-        .eq("id", user.id)
-        .select();
+        .eq("id", user.id);
       
-      if (updateError) {
-        throw new Error(`Error al actualizar perfil: ${updateError.message}`);
+      if (error) {
+        throw new Error(`Error al actualizar perfil: ${error.message}`);
       }
       
-      if (!updatedProfile || updatedProfile.length === 0) {
-        throw new Error("No se pudo actualizar el perfil");
-      }
-      
-      // Paso 3: Cerrar sesión en Supabase
-      const { error: signOutError } = await supabase.auth.signOut();
-      if (signOutError) {
-        throw new Error(`Error al cerrar sesión: ${signOutError.message}`);
-      }
-      
-      // Paso 4: Navegar con recarga completa para limpiar TODO el estado
       toast({
         title: "Has abandonado el culto",
-        description: "Tu sesión ha sido cerrada.",
+        description: "Tu sesión será cerrada.",
       });
       
-      // Pequeño delay para que el toast se vea
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Cerrar sesión usando el contexto (limpia estado + localStorage)
+      await signOut();
       
-      window.location.href = "/";
+      // Pequeño delay para asegurar que todo se limpió, luego recarga completa
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 300);
       
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";
@@ -76,7 +53,6 @@ export default function Perfil() {
         description: msg,
         variant: "destructive",
       });
-    } finally {
       setIsLeaving(false);
     }
   };
