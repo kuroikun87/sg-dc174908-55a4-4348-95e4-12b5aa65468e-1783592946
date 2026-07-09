@@ -58,13 +58,16 @@ export default function Perfil() {
         throw new Error(`Error al cerrar sesión: ${signOutError.message}`);
       }
       
-      // Paso 4: Limpiar estado local y navegar
+      // Paso 4: Navegar con recarga completa para limpiar TODO el estado
       toast({
         title: "Has abandonado el culto",
         description: "Tu sesión ha sido cerrada.",
       });
       
-      await router.push("/");
+      // Pequeño delay para que el toast se vea
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      window.location.href = "/";
       
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";

@@ -102,8 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     
     if (signUpError) {
-      // Si Supabase dice que ya existe, dar mensaje claro
-      if (signUpError.message.includes("already registered") || signUpError.message.includes("already exists")) {
+      if (signUpError.message.includes("already registered") || signUpError.message.includes("already exists") || signUpError.message.includes("User already registered")) {
         throw new Error("Este email ya está registrado. Usá 'Entrar al Culto' en lugar de 'Crear cuenta'.");
       }
       throw signUpError;
@@ -113,17 +112,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("No se pudo crear la cuenta");
     }
 
-    // Con confirmación de email DESACTIVADA, Supabase debería devolver sesión inmediatamente
-    // Si NO hay sesión, el usuario probablemente ya existe
-    if (!signUpData.session) {
-      throw new Error("Este email ya está registrado. Usá 'Entrar al Culto' en lugar de 'Crear cuenta'.");
+    // Distinguir usuario NUEVO vs EXISTENTE: verificar si el perfil ya existe
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", signUpData.user.id)
+      .maybeSingle();
+
+    if (existingProfile) {
+      // Usuario EXISTENTE - Supabase hizo auto-login
+      // La contraseña NO se cambió, mantener la original
+      if (signUpData.session) {
+        setSession(signUpData.session);
+        setUser(signUpData.session.user);
+      }
+      throw new Error("Este email ya está registrado. Usá 'Entrar al Culto' con tu contraseña original.");
     }
 
-    // Usuario NUEVO creado exitosamente con sesión
+    // Usuario NUEVO - debe tener sesión
+    if (!signUpData.session) {
+      throw new Error("Error al crear la sesión. Intenta de nuevo.");
+    }
+
     setSession(signUpData.session);
     setUser(signUpData.session.user);
     
-    // Crear perfil automáticamente
     const { error: profileError } = await supabase.from("profiles").insert({
       id: signUpData.session.user.id,
       email,
