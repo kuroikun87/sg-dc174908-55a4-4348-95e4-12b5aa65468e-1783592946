@@ -1,6 +1,6 @@
 ---
 title: Sistema de Diseño Grimorio
-status: in_progress
+status: done
 priority: urgent
 type: chore
 tags: [design-system, theme, gothic]
@@ -20,15 +20,15 @@ Establecer el tema visual gótico/ritualista para toda la aplicación. Incluye:
 
 ## Checklist
 
-- [ ] Configurar globals.css con variables de color góticas y fuentes Cinzel/EB Garamond
-- [ ] Actualizar tailwind.config.ts con colores personalizados y fuentes
-- [ ] Crear componente BookPage para transiciones de página
-- [ ] Crear componente RitualButton con variantes doradas y vino
-- [ ] Crear componente ParchmentCard para contenedores tipo pergamino
-- [ ] Verificar contraste WCAG AA en combinaciones principales
+- [x] Configurar globals.css con variables de color góticas y fuentes Cinzel/EB Garamond
+- [x] Actualizar tailwind.config.ts con colores personalizados y fuentes
+- [x] Crear componente BookPage para transiciones de página
+- [x] Crear componente RitualButton con variantes doradas y vino
+- [x] Crear componente ParchmentCard para contenedores tipo pergamino
+- [x] Verificar contraste WCAG AA en combinaciones principales
 
 ## Acceptance
 
-- [ ] La app muestra el tema oscuro gótico con acentos dorados
-- [ ] Las fuentes Cinzel y EB Garamond se cargan correctamente
-- [ ] Los componentes base tienen estilo ritualista coherente
+- [x] La app muestra el tema oscuro gótico con acentos dorados
+- [x] Las fuentes Cinzel y EB Garamond se cargan correctamente
+- [x] Los componentes base tienen estilo ritualista coherente
