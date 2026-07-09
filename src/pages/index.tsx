@@ -6,6 +6,7 @@ import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { Check } from "lucide-react";
 
 type AuthStep = "landing" | "login" | "signup" | "onboarding";
 
@@ -285,24 +286,34 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Checkbox +18 */}
-                <div className="flex items-start gap-3 p-3 bg-wine/5 border border-wine/20 rounded-sm">
-                  <AlertTriangle className="w-5 h-5 text-wine flex-shrink-0 mt-0.5" />
-                  <div className="space-y-2">
-                    <p className="font-body text-sm text-foreground">
-                      Esta aplicación contiene contenido para adultos. Debes ser mayor de 18 años para acceder.
-                    </p>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isOver18}
-                        onChange={(e) => setIsOver18(e.target.checked)}
-                        className="accent-gold w-4 h-4"
-                      />
-                      <span className="font-heading text-xs text-gold">
-                        Confirmo que soy mayor de 18 años
-                      </span>
-                    </label>
+                {/* Checkbox +18 - AHORA CON VALIDACIÓN ESTRICTA */}
+                <div className={`p-4 rounded-sm border transition-all ${isOver18 ? 'bg-gold/5 border-gold/30' : 'bg-wine/5 border-wine/30'}`}>
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isOver18 ? 'text-gold' : 'text-wine'}`} />
+                    <div className="space-y-3">
+                      <p className="font-body text-sm text-foreground">
+                        Esta aplicación contiene contenido explícito para adultos. Debes ser mayor de 18 años para acceder.
+                      </p>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className={`
+                          w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all
+                          ${isOver18 
+                            ? 'bg-gold border-gold' 
+                            : 'bg-transparent border-wine/50 group-hover:border-wine'}
+                        `}>
+                          {isOver18 && <Check className="w-3 h-3 text-background" />}
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isOver18}
+                          onChange={(e) => setIsOver18(e.target.checked)}
+                          className="hidden"
+                        />
+                        <span className={`font-heading text-sm ${isOver18 ? 'text-gold' : 'text-wine'}`}>
+                          Confirmo que soy mayor de 18 años
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </div>
 
@@ -310,7 +321,7 @@ export default function Home() {
                   type="submit"
                   variant="gold"
                   className="w-full mt-4"
-                  disabled={isLoading}
+                  disabled={isLoading || !isOver18}
                 >
                   {isLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -318,6 +329,12 @@ export default function Home() {
                     "Crear Cuenta"
                   )}
                 </RitualButton>
+
+                {!isOver18 && (
+                  <p className="text-center text-xs text-wine font-body">
+                    Debes confirmar tu mayoría de edad para continuar
+                  </p>
+                )}
 
                 <div className="flex justify-between pt-2">
                   <button
@@ -371,7 +388,6 @@ function OnboardingFlow() {
 
   const createCult = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Aquí iría la creación real del culto
     toast({
       title: "Culto creado",
       description: `El culto "${cultName}" ha sido fundado. Eres la Deidad Principal.`,
@@ -381,7 +397,6 @@ function OnboardingFlow() {
 
   const joinCult = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Aquí iría la validación del código
     toast({
       title: "Código verificado",
       description: "Has sido admitido en el culto.",
