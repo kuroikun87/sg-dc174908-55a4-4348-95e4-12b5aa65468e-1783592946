@@ -39,7 +39,7 @@ export default function Home() {
     try {
       await signIn(email, password);
       toast({ title: "Bienvenido", description: "Has entrado al grimorio." });
-      await router.push("/dashboard");
+      // La navegación la maneja el useEffect automáticamente
     } catch (error) {
       toast({
         title: "Error",
