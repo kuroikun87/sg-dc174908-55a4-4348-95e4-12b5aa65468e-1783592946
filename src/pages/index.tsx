@@ -25,7 +25,7 @@ export default function Home() {
   useEffect(() => {
     const checkSupabase = async () => {
       try {
-        const { error } = await supabase.from("cults").select("count", { count: "exact", head: true });
+        const { error } = await supabase.from("cults").select("*", { count: "exact", head: true });
         if (error) {
           console.error("[Health Check] Supabase error:", error.message, error.code);
           setSupabaseStatus("error");
