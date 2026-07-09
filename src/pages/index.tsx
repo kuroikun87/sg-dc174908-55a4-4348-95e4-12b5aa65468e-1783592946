@@ -72,13 +72,27 @@ export default function Home() {
           variant: "destructive",
         });
         setStep("landing");
-      } else {
-        toast({
-          title: "Cuenta creada",
-          description: "Tu cuenta ha sido sellada. Ahora elige tu camino.",
-        });
-        setStep("onboarding");
+        return;
       }
+      
+      // Esperar a que el perfil se cargue en el estado
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Si el usuario ya tiene un culto (mismo email usado antes), ir al dashboard
+      if (profile?.cult_id) {
+        toast({
+          title: "Bienvenido de vuelta",
+          description: "Ya perteneces a un culto.",
+        });
+        await router.push("/dashboard");
+        return;
+      }
+      
+      toast({
+        title: "Cuenta creada",
+        description: "Tu cuenta ha sido sellada. Ahora elige tu camino.",
+      });
+      setStep("onboarding");
     } catch (error) {
       toast({
         title: "Error",
