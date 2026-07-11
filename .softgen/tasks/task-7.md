@@ -11,22 +11,24 @@ position: 7
 
 ## Notes
 Problemas reportados por el usuario:
-1. Códigos de invitación dicen "inválido" al usarlos
-2. Navegación extraña: hay que dar múltiples clics para entrar
-3. No se pueden borrar usuarios/cultos en Supabase
-4. Fiel no ve opción de "Sesión" en el menú
-5. Datos mock/falsos aparecieron en el dashboard
+1. Códigos de invitación dicen "inválido" al usarlos → RLS corregido, BD limpia
+2. Navegación extraña: hay que dar múltiples clics para entrar → useEffect arreglado
+3. No se pueden borrar usuarios/cultos en Supabase → ON DELETE CASCADE agregado
+4. Fiel no ve opción de "Sesión" en el menú → Agregado
+5. Datos mock/falsos aparecieron en el dashboard → Eliminados de código y BD
 
 ## Causas raíz identificadas
-- RLS de invitation_codes bloquea lectura a no-creadores
-- useEffect en index.tsx fuerza onboarding antes de cargar perfil
-- Foreign keys sin ON DELETE CASCADE
-- FollowerMenu no incluye link a /dashboard/sesion
+- RLS de invitation_codes bloqueaba lectura a no-creadores → CORREGIDO
+- useEffect en index.tsx forzaba onboarding antes de cargar perfil → CORREGIDO
+- Foreign keys sin ON DELETE CASCADE → CORREGIDO
+- FollowerMenu no incluía link a /dashboard/sesion → CORREGIDO
+- Datos mock hardcodeados en culto.tsx y jerarquia.tsx → CORREGIDO
 
 ## Checklist
-- [ ] Arreglar RLS de invitation_codes para lectura pública de códigos activos
-- [ ] Arreglar useEffect de navegación para no forzar onboarding prematuramente
-- [ ] Agregar ON DELETE CASCADE a foreign keys críticas
-- [ ] Agregar "Sesión" al menú de fiel
-- [ ] Verificar que no queden datos mock en ninguna página del dashboard
+- [x] Arreglar RLS de invitation_codes para lectura pública de códigos activos
+- [x] Arreglar useEffect de navegación para no forzar onboarding prematuramente
+- [x] Agregar ON DELETE CASCADE a foreign keys críticas
+- [x] Agregar "Sesión" al menú de fiel
+- [x] Verificar que no queden datos mock en ninguna página del dashboard
 - [ ] Probar flujo completo: crear culto → ver códigos → invitar fiel → unirse con código
+- [ ] Verificar que la deidad principal pueda ver su código de deidad
