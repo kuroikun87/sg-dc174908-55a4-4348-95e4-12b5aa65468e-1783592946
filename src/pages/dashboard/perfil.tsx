@@ -44,9 +44,17 @@ export default function Perfil() {
         description: "Tu sesión será cerrada.",
       });
       
-      await supabase.auth.signOut();
+      // Limpiar TODO el almacenamiento local primero
       window.localStorage.clear();
-      window.location.href = "/";
+      window.sessionStorage.clear();
+      
+      // Cerrar sesión en Supabase
+      await supabase.auth.signOut();
+      
+      // Recarga completa después de un pequeño delay
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 500);
       
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";

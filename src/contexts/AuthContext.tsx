@@ -60,7 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        // Delay para asegurar que el token se propague antes de hacer queries
+        setTimeout(() => fetchProfile(session.user.id), 100);
       } else {
         setProfile(null);
       }
@@ -84,8 +85,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    // Cargar perfil inmediatamente para evitar delay en la UI
+    if (data.user) {
+      await fetchProfile(data.user.id);
+    }
   };
 
   const signUp = async (email: string, password: string, role: UserRole, displayName: string): Promise<{ needsEmailConfirmation: boolean }> => {

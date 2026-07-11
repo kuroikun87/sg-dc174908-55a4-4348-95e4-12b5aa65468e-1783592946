@@ -50,6 +50,20 @@ export default function Home() {
     try {
       await signIn(email, password);
       toast({ title: "Bienvenido", description: "Has entrado al grimorio." });
+      // Verificar inmediatamente si tiene culto y redirigir
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const { data: currentProfile } = await supabase
+          .from("profiles")
+          .select("cult_id")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+        if (currentProfile?.cult_id) {
+          await router.push("/dashboard");
+          return;
+        }
+      }
+      setStep("onboarding");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "";
       if (msg.includes("Invalid login credentials")) {
