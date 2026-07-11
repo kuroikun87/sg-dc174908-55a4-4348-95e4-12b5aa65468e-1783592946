@@ -262,7 +262,6 @@ export type Database = {
           cult_id: string
           id: string
           is_active: boolean | null
-          used_by: string | null
         }
         Insert: {
           code: string
@@ -272,7 +271,6 @@ export type Database = {
           cult_id: string
           id?: string
           is_active?: boolean | null
-          used_by?: string | null
         }
         Update: {
           code?: string
@@ -282,7 +280,6 @@ export type Database = {
           cult_id?: string
           id?: string
           is_active?: boolean | null
-          used_by?: string | null
         }
         Relationships: [
           {

@@ -11,7 +11,6 @@ export interface InvitationCode {
   creator_id: string;
   cult_id: string;
   is_active: boolean;
-  used_by: string | null;
   created_at: string;
 }
 
@@ -160,7 +159,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     if (existingCult) {
-      // Ya tiene un culto - asegurar que el rol sea deity y vincular
       const { error: updateError } = await supabase
         .from("profiles")
         .update({
@@ -180,6 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.cultName) {
+      // Crear culto
       const { data: cult, error: cultError } = await supabase
         .from("cults")
         .insert({
@@ -193,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(`Error al crear culto: ${cultError.message}`);
       }
 
+      // Actualizar perfil como deidad principal
       const { error: updateError } = await supabase
         .from("profiles")
         .update({
@@ -206,19 +206,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (updateError) {
         throw new Error(`Error al actualizar perfil: ${updateError.message}`);
       }
+
+      // Generar códigos de invitación estáticos permanentes para la deidad principal
+      const generateStaticCode = () => {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        let code = "";
+        for (let i = 0; i < 8; i++) {
+          code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return code;
+      };
+
+      const deityCode = generateStaticCode();
+      const followerCode = generateStaticCode();
+
+      const { error: codesError } = await supabase.from("invitation_codes").insert([
+        {
+          code: deityCode,
+          code_type: "deity",
+          creator_id: currentUser.id,
+          cult_id: cult.id,
+          is_active: true,
+        },
+        {
+          code: followerCode,
+          code_type: "follower",
+          creator_id: currentUser.id,
+          cult_id: cult.id,
+          is_active: true,
+        },
+      ]);
+
+      if (codesError) {
+        console.error("[completeOnboarding] Error al crear códigos:", codesError.message);
+      }
       
       await fetchProfile(currentUser.id);
       
     } else if (data.inviteCode) {
+      // Buscar código activo (códigos estáticos nunca se desactivan)
       const { data: code, error: codeError } = await supabase
         .from("invitation_codes")
-        .select("*, creator:creator_id(role, cult_id)")
+        .select("*, creator:creator_id(role, cult_id, is_main_deity)")
         .eq("code", data.inviteCode.toUpperCase())
         .eq("is_active", true)
         .single();
 
       if (codeError || !code) {
-        throw new Error("Código inválido o expirado");
+        throw new Error("Código inválido o inactivo");
+      }
+
+      // Solo la deidad principal puede invitar deidades secundarias
+      if (code.code_type === "deity" && !code.creator.is_main_deity) {
+        throw new Error("Solo la Deidad Principal puede invitar a otras deidades");
       }
 
       const isDeityCode = code.code_type === "deity";
@@ -234,6 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (updateError) throw updateError;
 
+      // Registrar en jerarquía: si es fiel, asignarlo a la deidad que invitó
       if (!isDeityCode) {
         await supabase.from("hierarchy").insert({
           deity_id: code.creator_id,
@@ -242,10 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      await supabase
-        .from("invitation_codes")
-        .update({ is_active: false, used_by: currentUser.id })
-        .eq("id", code.id);
+      // NO desactivar el código — los códigos son estáticos y permanentes
         
       await fetchProfile(currentUser.id);
     }
