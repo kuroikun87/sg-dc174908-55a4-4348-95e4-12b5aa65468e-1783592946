@@ -112,6 +112,7 @@ function FollowerMenu() {
     { icon: <Heart className="w-5 h-5" />, title: "Fetiches", desc: "Marcar prácticas", href: "/dashboard/fetiches" },
     { icon: <Settings className="w-5 h-5" />, title: "Tareas", desc: "Mis asignaciones", href: "/dashboard/tareas" },
     { icon: <Star className="w-5 h-5" />, title: "Premios", desc: "Mis recompensas", href: "/dashboard/tareas" },
+    { icon: <Settings className="w-5 h-5" />, title: "Sesión", desc: "Beats y control", href: "/dashboard/sesion" },
     { icon: <Scroll className="w-5 h-5" />, title: "Notas", desc: "Apuntes personales", href: "/dashboard/notas" },
   ];
 
