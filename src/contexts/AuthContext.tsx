@@ -245,19 +245,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
     } else if (data.inviteCode) {
       // Buscar código activo (códigos estáticos nunca se desactivan)
+      const cleanCode = data.inviteCode.trim().toUpperCase();
+      
+      console.log("[completeOnboarding] Buscando código:", cleanCode);
+      
       const { data: code, error: codeError } = await supabase
         .from("invitation_codes")
-        .select("*, creator:creator_id(role, cult_id, is_main_deity)")
-        .eq("code", data.inviteCode.toUpperCase())
+        .select("*")
+        .eq("code", cleanCode)
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
-      if (codeError || !code) {
+      if (codeError) {
+        console.error("[completeOnboarding] Error en query de código:", codeError.message);
+        throw new Error(`Error al verificar código: ${codeError.message}`);
+      }
+
+      if (!code) {
+        console.error("[completeOnboarding] Código no encontrado:", cleanCode);
         throw new Error("Código inválido o inactivo");
       }
 
+      console.log("[completeOnboarding] Código encontrado:", code);
+
+      // Obtener datos del creador por separado para evitar problemas con RLS en joins
+      const { data: creatorProfile } = await supabase
+        .from("profiles")
+        .select("role, cult_id, is_main_deity")
+        .eq("id", code.creator_id)
+        .maybeSingle();
+
       // Solo la deidad principal puede invitar deidades secundarias
-      if (code.code_type === "deity" && !code.creator.is_main_deity) {
+      if (code.code_type === "deity" && !creatorProfile?.is_main_deity) {
         throw new Error("Solo la Deidad Principal puede invitar a otras deidades");
       }
 
@@ -267,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from("profiles")
         .update({
           role: isDeityCode ? "deity" : "follower",
-          cult_id: code.creator.cult_id,
+          cult_id: code.cult_id,
           display_name: data.displayName,
         })
         .eq("id", currentUser.id);
@@ -279,7 +298,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await supabase.from("hierarchy").insert({
           deity_id: code.creator_id,
           follower_id: currentUser.id,
-          cult_id: code.creator.cult_id,
+          cult_id: code.cult_id,
         });
       }
 
@@ -297,16 +316,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         const newFollowerCode = generateStaticCode();
-        const { error: codeError } = await supabase.from("invitation_codes").insert({
+        const { error: newCodeError } = await supabase.from("invitation_codes").insert({
           code: newFollowerCode,
           code_type: "follower",
           creator_id: currentUser.id,
-          cult_id: code.creator.cult_id,
+          cult_id: code.cult_id,
           is_active: true,
         });
 
-        if (codeError) {
-          console.error("[completeOnboarding] Error al crear código de fiel para nueva deidad:", codeError.message);
+        if (newCodeError) {
+          console.error("[completeOnboarding] Error al crear código de fiel para nueva deidad:", newCodeError.message);
         }
       }
         
