@@ -25,23 +25,23 @@ export default function Home() {
   useEffect(() => {
     if (authLoading) return;
     
-    // Esperar a que el perfil se cargue completamente antes de decidir
     if (!user) {
       setStep("landing");
       return;
     }
     
-    // Usuario logueado — verificar si tiene culto
+    // Perfil todavía cargando, esperar
     if (profile === null) {
-      // Perfil todavía cargando, no hacer nada todavía
       return;
     }
     
     if (!profile.cult_id) {
       // Usuario logueado sin culto → onboarding
       setStep("onboarding");
+    } else {
+      // Usuario logueado CON culto → mostrar pantalla de sesión activa
+      setStep("landing");
     }
-    // Si tiene culto, el JSX mostrará la pantalla de sesión activa
   }, [authLoading, user, profile]);
 
   const handleLogin = async (e: React.FormEvent) => {

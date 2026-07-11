@@ -238,7 +238,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       if (codesError) {
-        console.error("[completeOnboarding] Error al crear códigos:", codesError.message);
+        console.error("[completeOnboarding] Error al crear códigos:", codesError.message, codesError.code, codesError.details);
+        throw new Error(`Error al crear códigos: ${codesError.message}`);
+      } else {
+        console.log("[completeOnboarding] Códigos creados exitosamente:", { deityCode, followerCode });
       }
       
       await fetchProfile(currentUser.id);
