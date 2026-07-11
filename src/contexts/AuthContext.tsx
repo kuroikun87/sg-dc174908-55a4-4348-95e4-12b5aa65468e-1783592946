@@ -284,6 +284,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // NO desactivar el código — los códigos son estáticos y permanentes
+
+      // Generar código de fiel automáticamente para la nueva deidad
+      if (isDeityCode) {
+        const generateStaticCode = () => {
+          const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+          let code = "";
+          for (let i = 0; i < 8; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          return code;
+        };
+
+        const newFollowerCode = generateStaticCode();
+        const { error: codeError } = await supabase.from("invitation_codes").insert({
+          code: newFollowerCode,
+          code_type: "follower",
+          creator_id: currentUser.id,
+          cult_id: code.creator.cult_id,
+          is_active: true,
+        });
+
+        if (codeError) {
+          console.error("[completeOnboarding] Error al crear código de fiel para nueva deidad:", codeError.message);
+        }
+      }
         
       await fetchProfile(currentUser.id);
     }
