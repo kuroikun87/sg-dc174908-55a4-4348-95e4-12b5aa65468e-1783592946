@@ -197,19 +197,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(`Error al crear culto: ${cultError.message}`);
       }
 
-      // Actualizar perfil como deidad principal
-      const { error: updateError } = await supabase
+      // Verificar si el perfil existe, crearlo si no
+      const { data: existingProfile } = await supabase
         .from("profiles")
-        .update({
+        .select("id")
+        .eq("id", currentUser.id)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        const { error: createError } = await supabase.from("profiles").insert({
+          id: currentUser.id,
+          email: currentUser.email || "",
           role: "deity",
           cult_id: cult.id,
           is_main_deity: true,
           display_name: data.displayName,
-        })
-        .eq("id", currentUser.id);
+        });
+        if (createError) {
+          throw new Error(`Error al crear perfil: ${createError.message}`);
+        }
+      } else {
+        // Actualizar perfil existente
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({
+            role: "deity",
+            cult_id: cult.id,
+            is_main_deity: true,
+            display_name: data.displayName,
+          })
+          .eq("id", currentUser.id);
 
-      if (updateError) {
-        throw new Error(`Error al actualizar perfil: ${updateError.message}`);
+        if (updateError) {
+          throw new Error(`Error al actualizar perfil: ${updateError.message}`);
+        }
       }
 
       // Generar códigos de invitación estáticos permanentes para la deidad principal
@@ -290,16 +311,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const isDeityCode = code.code_type === "deity";
       
-      const { error: updateError } = await supabase
+      // Verificar si el perfil existe, crearlo si no
+      const { data: existingProfile } = await supabase
         .from("profiles")
-        .update({
+        .select("id")
+        .eq("id", currentUser.id)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        const { error: createError } = await supabase.from("profiles").insert({
+          id: currentUser.id,
+          email: currentUser.email || "",
           role: isDeityCode ? "deity" : "follower",
           cult_id: code.cult_id,
           display_name: data.displayName,
-        })
-        .eq("id", currentUser.id);
+        });
+        if (createError) {
+          throw new Error(`Error al crear perfil: ${createError.message}`);
+        }
+      } else {
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({
+            role: isDeityCode ? "deity" : "follower",
+            cult_id: code.cult_id,
+            display_name: data.displayName,
+          })
+          .eq("id", currentUser.id);
 
-      if (updateError) throw updateError;
+        if (updateError) throw updateError;
+      }
 
       // Registrar en jerarquía: si es fiel, asignarlo a la deidad que invitó
       if (!isDeityCode) {

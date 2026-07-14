@@ -25,29 +25,13 @@ export default function Perfil() {
     setIsLeaving(true);
     
     try {
-      // Intentar update primero
-      const { data: updatedRows, error } = await supabase
+      const { error } = await supabase
         .from("profiles")
         .update({ cult_id: null, role: null, is_main_deity: false, title: null })
-        .eq("id", user.id)
-        .select();
+        .eq("id", user.id);
       
-      if (error || !updatedRows || updatedRows.length === 0) {
-        // Si el perfil no existe, intentar insertar uno nuevo
-        const { error: insertError } = await supabase
-          .from("profiles")
-          .insert({
-            id: user.id,
-            email: user.email || "",
-            cult_id: null,
-            role: null,
-            is_main_deity: false,
-            title: null,
-          });
-        
-        if (insertError) {
-          throw new Error(`No se pudo actualizar el perfil: ${insertError.message}`);
-        }
+      if (error) {
+        throw new Error(`Error al actualizar perfil: ${error.message}`);
       }
       
       toast({
