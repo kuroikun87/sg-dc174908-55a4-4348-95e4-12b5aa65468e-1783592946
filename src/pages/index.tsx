@@ -220,11 +220,14 @@ export default function Home() {
                     
                     <button
                       onClick={async () => {
+                        window.localStorage.clear();
+                        window.sessionStorage.clear();
                         await signOut();
                         toast({
                           title: "Sesión cerrada",
                           description: "Puedes crear una nueva cuenta o entrar con otra.",
                         });
+                        window.location.href = "/";
                       }}
                       className="w-full py-3 text-muted-foreground hover:text-wine transition-colors font-body text-sm"
                     >

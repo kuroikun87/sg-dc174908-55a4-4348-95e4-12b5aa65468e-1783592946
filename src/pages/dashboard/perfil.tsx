@@ -25,18 +25,29 @@ export default function Perfil() {
     setIsLeaving(true);
     
     try {
+      // Intentar update primero
       const { data: updatedRows, error } = await supabase
         .from("profiles")
         .update({ cult_id: null, role: null, is_main_deity: false, title: null })
         .eq("id", user.id)
         .select();
       
-      if (error) {
-        throw new Error(`Error al actualizar perfil: ${error.message}`);
-      }
-      
-      if (!updatedRows || updatedRows.length === 0) {
-        throw new Error("No se pudo actualizar el perfil.");
+      if (error || !updatedRows || updatedRows.length === 0) {
+        // Si el perfil no existe, intentar insertar uno nuevo
+        const { error: insertError } = await supabase
+          .from("profiles")
+          .insert({
+            id: user.id,
+            email: user.email || "",
+            cult_id: null,
+            role: null,
+            is_main_deity: false,
+            title: null,
+          });
+        
+        if (insertError) {
+          throw new Error(`No se pudo actualizar el perfil: ${insertError.message}`);
+        }
       }
       
       toast({
@@ -44,14 +55,10 @@ export default function Perfil() {
         description: "Tu sesión será cerrada.",
       });
       
-      // Limpiar TODO el almacenamiento local primero
       window.localStorage.clear();
       window.sessionStorage.clear();
-      
-      // Cerrar sesión en Supabase
       await supabase.auth.signOut();
       
-      // Recarga completa después de un pequeño delay
       setTimeout(() => {
         window.location.href = "/";
       }, 500);

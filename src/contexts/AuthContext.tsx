@@ -225,7 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const deityCode = generateStaticCode();
       const followerCode = generateStaticCode();
 
-      const { error: codesError } = await supabase.from("invitation_codes").insert([
+      const { error: codesError } = await supabase.from("invitation_codes").upsert([
         {
           code: deityCode,
           code_type: "deity",
@@ -240,7 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           cult_id: cult.id,
           is_active: true,
         },
-      ]);
+      ], { onConflict: "creator_id,code_type" });
 
       if (codesError) {
         console.error("[completeOnboarding] Error al crear códigos:", codesError.message, codesError.code, codesError.details);
