@@ -88,6 +88,10 @@ export default function SesionPage() {
   // Refs para valores que se usan en Realtime pero no deben recrear el canal
   const cardsRef = useRef<SessionCard[]>([]);
   const activeSessionRef = useRef<ActiveSession | null>(null);
+  const rpmRef = useRef<number>(60);
+  const isPlayingRef = useRef<boolean>(false);
+  const isMutedRef = useRef<boolean>(false);
+  const activeCardRef = useRef<SessionCard | null>(null);
   
   // Estado de la sesión
   const [rpm, setRpm] = useState(60);
@@ -156,15 +160,33 @@ export default function SesionPage() {
     activeSessionRef.current = activeSession;
   }, [activeSession]);
 
+  useEffect(() => {
+    rpmRef.current = rpm;
+  }, [rpm]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    activeCardRef.current = activeCard;
+  }, [activeCard]);
+
   // Beat automático
   useEffect(() => {
     if (!isPlaying) return;
 
     const interval = 60000 / rpm; // milisegundos por beat
     const beatInterval = setInterval(() => {
-      // Los fieles siempre escuchan; las deidades respetan el mute
-      if (isDeity && isMuted) return;
-      playBeat();
+      // Sonido: solo si no es deidad muted
+      if (!(isDeity && isMuted)) {
+        playBeat();
+      }
+      // Animación: SIEMPRE (incluso si deidad está muted)
       animateBeatCircle();
     }, interval);
 
@@ -212,21 +234,21 @@ export default function SesionPage() {
           if (payload.eventType === "UPDATE") {
             const updated = payload.new as ActiveSession;
             
-            // Actualizar RPM
-            if (updated.current_rpm !== rpm) {
-              console.log(`[Realtime] RPM changed: ${rpm} → ${updated.current_rpm}`);
+            // Actualizar RPM - usar ref para comparación
+            if (updated.current_rpm !== rpmRef.current) {
+              console.log(`[Realtime] RPM changed: ${rpmRef.current} → ${updated.current_rpm}`);
               setRpm(updated.current_rpm);
             }
             
-            // Actualizar play/pause
-            if (updated.is_playing !== isPlaying) {
-              console.log(`[Realtime] Playing changed: ${isPlaying} → ${updated.is_playing}`);
+            // Actualizar play/pause - usar ref para comparación
+            if (updated.is_playing !== isPlayingRef.current) {
+              console.log(`[Realtime] Playing changed: ${isPlayingRef.current} → ${updated.is_playing}`);
               setIsPlaying(updated.is_playing);
             }
             
-            // Actualizar mute (solo deidades)
-            if (isDeity && updated.is_muted_for_deity !== isMuted) {
-              console.log(`[Realtime] Mute changed: ${isMuted} → ${updated.is_muted_for_deity}`);
+            // Actualizar mute (solo deidades) - usar ref para comparación
+            if (isDeity && updated.is_muted_for_deity !== isMutedRef.current) {
+              console.log(`[Realtime] Mute changed: ${isMutedRef.current} → ${updated.is_muted_for_deity}`);
               setIsMuted(updated.is_muted_for_deity);
             }
             
@@ -240,9 +262,9 @@ export default function SesionPage() {
               }
             }
             
-            // Actualizar tarjeta activa - usar ref para buscar tarjetas
-            if (updated.current_card_id && updated.current_card_id !== activeCard?.id) {
-              console.log(`[Realtime] Card changed: ${activeCard?.id} → ${updated.current_card_id}`);
+            // Actualizar tarjeta activa - usar ref para buscar tarjetas y comparación
+            if (updated.current_card_id && updated.current_card_id !== activeCardRef.current?.id) {
+              console.log(`[Realtime] Card changed: ${activeCardRef.current?.id} → ${updated.current_card_id}`);
               const card = cardsRef.current.find(c => c.id === updated.current_card_id);
               if (card) {
                 setActiveCard(card);
@@ -258,7 +280,7 @@ export default function SesionPage() {
                   setCardTimeLeft(updated.card_duration_seconds);
                 }
               }
-            } else if (!updated.current_card_id && activeCard) {
+            } else if (!updated.current_card_id && activeCardRef.current) {
               console.log("[Realtime] Card removed");
               setActiveCard(null);
               setCardDuration(null);
