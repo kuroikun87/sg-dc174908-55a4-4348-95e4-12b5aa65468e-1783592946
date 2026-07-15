@@ -52,7 +52,8 @@ export default function RangosPage() {
       setRanks(data || []);
       
       // Si no hay rangos, crear el rango base "Fiel" automáticamente
-      if (!data || data.length === 0) {
+      // Verificar que no haya NINGÚN rango de nivel 0 para evitar duplicados
+      if (!data || data.length === 0 || !data.some(r => r.level === 0)) {
         await createDefaultRank();
       }
     }
@@ -111,6 +112,41 @@ export default function RangosPage() {
       return;
     }
 
+    // Verificar si hay usuarios asignados a este rango
+    const { data: usersWithRank } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("rank_id", id);
+
+    if (usersWithRank && usersWithRank.length > 0) {
+      // Buscar el rango base (nivel 0) para reasignar usuarios
+      const baseRank = ranks.find(r => r.level === 0 && r.id !== id);
+      
+      if (baseRank) {
+        // Reasignar usuarios al rango base
+        const { error: reassignError } = await supabase
+          .from("profiles")
+          .update({ rank_id: baseRank.id })
+          .eq("rank_id", id);
+
+        if (reassignError) {
+          toast({
+            title: "Error",
+            description: `No se pudieron reasignar los usuarios: ${reassignError.message}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      } else {
+        // Quitar el rank_id de los usuarios (dejarlo en null)
+        await supabase
+          .from("profiles")
+          .update({ rank_id: null })
+          .eq("rank_id", id);
+      }
+    }
+
+    // Ahora sí borrar el rango
     const { error } = await supabase.from("ranks").delete().eq("id", id);
 
     if (error) {
