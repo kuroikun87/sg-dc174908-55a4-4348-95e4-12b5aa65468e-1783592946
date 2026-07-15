@@ -64,16 +64,16 @@ export default function AlmanaquePage() {
       return;
     }
 
-    // Cargar eventos del mes actual
-    const startDate = new Date(year, month, 1).toISOString().split('T')[0];
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    // Cargar eventos del mes actual usando rangos de timestamp
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0, 23, 59, 59);
 
     const { data, error } = await supabase
       .from("calendar_events")
       .select("*")
       .eq("user_id", user.id)
-      .gte("event_date", startDate)
-      .lte("event_date", endDate);
+      .gte("event_date", startDate.toISOString())
+      .lte("event_date", endDate.toISOString());
 
     if (error) {
       toast({
@@ -91,8 +91,12 @@ export default function AlmanaquePage() {
   const goToNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
   const getEventsForDate = (day: number) => {
-    const targetDate = new Date(year, month, day).toISOString().split('T')[0];
-    return events.filter(e => e.event_date === targetDate);
+    return events.filter(e => {
+      const eventDate = new Date(e.event_date);
+      return eventDate.getDate() === day && 
+             eventDate.getMonth() === month && 
+             eventDate.getFullYear() === year;
+    });
   };
 
   const addEvent = async (e: React.FormEvent) => {
@@ -100,16 +104,27 @@ export default function AlmanaquePage() {
     if (!selectedDate || !newEventTitle || !user) return;
 
     setIsSaving(true);
-    // Formatear fecha correctamente: YYYY-MM-DD en la zona horaria local
-    const eventDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
-      .toISOString()
-      .split('T')[0];
+    
+    // Crear timestamp completo con la fecha y hora seleccionadas en la zona horaria LOCAL del usuario
+    const eventDateTime = new Date(
+      selectedDate.getFullYear(), 
+      selectedDate.getMonth(), 
+      selectedDate.getDate()
+    );
+    
+    if (newEventTime) {
+      const [hours, minutes] = newEventTime.split(":").map(Number);
+      eventDateTime.setHours(hours, minutes, 0, 0);
+    } else {
+      eventDateTime.setHours(0, 0, 0, 0);
+    }
 
+    // Guardar como ISO string completo (UTC) - Postgres almacena con timezone
     const { error } = await supabase.from("calendar_events").insert({
       title: newEventTitle,
       event_type: newEventType,
-      event_date: eventDate,
-      event_time: newEventTime || null,
+      event_date: eventDateTime.toISOString(), // Timestamp completo en UTC
+      event_time: newEventTime || null, // Mantener por compatibilidad
       user_id: user.id,
       created_by: user.id,
     });
@@ -267,6 +282,11 @@ export default function AlmanaquePage() {
                   ) : (
                     getEventsForDate(selectedDate.getDate()).map(event => {
                       const typeInfo = eventTypes.find(t => t.key === event.event_type);
+                      const eventDate = new Date(event.event_date);
+                      const timeStr = event.event_time 
+                        ? eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : null;
+
                       return (
                         <div
                           key={event.id}
@@ -277,8 +297,8 @@ export default function AlmanaquePage() {
                               <span className={typeInfo?.color}>{typeInfo?.icon}</span>
                               <span className="font-heading text-sm text-foreground">{event.title}</span>
                             </div>
-                            {event.event_time && (
-                              <span className="font-body text-xs text-muted-foreground">{event.event_time}</span>
+                            {timeStr && (
+                              <span className="font-body text-xs text-muted-foreground">{timeStr}</span>
                             )}
                           </div>
                           <button
