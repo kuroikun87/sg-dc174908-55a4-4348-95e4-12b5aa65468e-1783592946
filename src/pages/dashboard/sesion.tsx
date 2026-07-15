@@ -1,435 +1,945 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Play, Pause, Volume2, VolumeX, Zap, Heart, Settings, 
-  Plus, Trash2, Clock, Send, Mic, ChevronRight 
-} from "lucide-react";
-import { BookPage } from "@/components/layout/BookPage";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { BookPage } from "@/components/layout/BookPage";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { RitualButton } from "@/components/ui/ritual-button";
+import { Slider } from "@/components/ui/slider";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Play,
+  Pause,
+  VolumeX,
+  Volume2,
+  Circle,
+  Plus,
+  Trash2,
+  Radio,
+  Loader2,
+  Users,
+  X,
+  Save,
+  Mic,
+  StopCircle,
+  FileAudio,
+  Zap,
+} from "lucide-react";
 
-// ============== BEAT ENGINE ==============
 interface BeatPattern {
   id: string;
   name: string;
-  beats: number[];
   intervals: number[];
+  created_at: string;
 }
 
-const defaultPatterns: BeatPattern[] = [
-  { id: "steady", name: "Ritmo Constante", beats: [1], intervals: [500] },
-  { id: "double", name: "Doble Latido", beats: [1, 1], intervals: [300, 600] },
-  { id: "waltz", name: "Vals Oscuro", beats: [1, 1, 1], intervals: [400, 400, 800] },
-];
+interface SessionCard {
+  id: string;
+  card_type: string;
+  title: string;
+  description: string | null;
+  is_official: boolean;
+}
 
-function useBeatEngine() {
+interface SessionAudio {
+  id: string;
+  name: string;
+  audio_url: string;
+  duration_seconds: number;
+  created_at: string;
+}
+
+interface ActiveSession {
+  id: string;
+  follower_ids: string[];
+  current_rpm: number;
+  is_playing: boolean;
+  is_muted_for_deity: boolean;
+  current_card_id: string | null;
+  card_duration_seconds: number | null;
+  card_show_timer: boolean;
+  card_started_at: string | null;
+}
+
+interface Follower {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+export default function SesionPage() {
+  const { profile, user } = useAuth();
+  const { toast } = useToast();
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Estado de la sesión
   const [rpm, setRpm] = useState(60);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [tapMode, setTapMode] = useState(false);
-  const [currentPattern, setCurrentPattern] = useState<BeatPattern>(defaultPatterns[0]);
-  const [circlePhase, setCirclePhase] = useState(0);
+  const [beatScale, setBeatScale] = useState(1);
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const [selectedFollowers, setSelectedFollowers] = useState<string[]>([]);
+  const [availableFollowers, setAvailableFollowers] = useState<Follower[]>([]);
   
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const patternIndexRef = useRef(0);
+  // Patrones, tarjetas y audios
+  const [patterns, setPatterns] = useState<BeatPattern[]>([]);
+  const [cards, setCards] = useState<SessionCard[]>([]);
+  const [audios, setAudios] = useState<SessionAudio[]>([]);
+  
+  // Grabación de patrones
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedIntervals, setRecordedIntervals] = useState<number[]>([]);
+  const [lastBeatTime, setLastBeatTime] = useState<number | null>(null);
+  const [newPatternName, setNewPatternName] = useState("");
+  
+  // Nueva tarjeta
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [newCardType, setNewCardType] = useState("action");
+  const [newCardTitle, setNewCardTitle] = useState("");
+  const [newCardDescription, setNewCardDescription] = useState("");
+  
+  // Tarjeta activa
+  const [activeCard, setActiveCard] = useState<SessionCard | null>(null);
+  const [cardDuration, setCardDuration] = useState<number | null>(null);
+  const [showTimer, setShowTimer] = useState(true);
+  const [cardTimeLeft, setCardTimeLeft] = useState<number | null>(null);
 
-  const initAudio = () => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext();
-    }
-  };
-
-  const playBeat = useCallback(() => {
-    if (!audioCtxRef.current || isMuted) return;
-    
-    const ctx = audioCtxRef.current;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.frequency.setValueAtTime(150, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.1);
-    
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-    
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.15);
-  }, [isMuted]);
+  const isDeity = profile?.role === "deity";
 
   useEffect(() => {
-    if (!isPlaying) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    loadData();
+    
+    // Inicializar AudioContext
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  // Beat automático
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    const interval = 60000 / rpm; // milisegundos por beat
+    const beatInterval = setInterval(() => {
+      playBeat();
+      animateBeatCircle();
+    }, interval);
+
+    return () => clearInterval(beatInterval);
+  }, [isPlaying, rpm, isMuted]);
+
+  // Temporizador de tarjeta
+  useEffect(() => {
+    if (!cardDuration || !activeCard) return;
+
+    const timer = setInterval(() => {
+      setCardTimeLeft((prev) => {
+        if (prev === null || prev <= 1) {
+          setActiveCard(null);
+          setCardDuration(null);
+          setCardTimeLeft(null);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [cardDuration, activeCard]);
+
+  // Sincronización con Supabase Realtime
+  useEffect(() => {
+    if (!activeSession) return;
+
+    const channel = supabase
+      .channel(`session:${activeSession.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "active_sessions",
+          filter: `id=eq.${activeSession.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "UPDATE") {
+            const updated = payload.new as ActiveSession;
+            setRpm(updated.current_rpm);
+            setIsPlaying(updated.is_playing);
+            if (isDeity) {
+              setIsMuted(updated.is_muted_for_deity);
+            }
+            
+            // Actualizar tarjeta activa
+            if (updated.current_card_id && updated.current_card_id !== activeCard?.id) {
+              const card = cards.find(c => c.id === updated.current_card_id);
+              if (card) {
+                setActiveCard(card);
+                setCardDuration(updated.card_duration_seconds);
+                setShowTimer(updated.card_show_timer);
+                setCardTimeLeft(updated.card_duration_seconds);
+              }
+            } else if (!updated.current_card_id) {
+              setActiveCard(null);
+              setCardDuration(null);
+              setCardTimeLeft(null);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeSession, isDeity, cards]);
+
+  const loadData = async () => {
+    if (!user || !profile?.cult_id) {
+      setIsLoading(false);
       return;
     }
 
-    initAudio();
-    const intervalMs = (60 / rpm) * 1000;
+    try {
+      // Cargar patrones
+      const { data: patternsData } = await supabase
+        .from("beat_patterns")
+        .select("*")
+        .eq("cult_id", profile.cult_id)
+        .order("created_at", { ascending: false });
+      setPatterns(patternsData || []);
 
-    intervalRef.current = setInterval(() => {
-      playBeat();
-      setCirclePhase(p => (p + 1) % 2);
-    }, intervalMs);
+      // Cargar tarjetas
+      const { data: cardsData } = await supabase
+        .from("session_cards")
+        .select("*")
+        .or(`cult_id.eq.${profile.cult_id},is_official.eq.true`)
+        .order("created_at", { ascending: false });
+      setCards(cardsData || []);
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isPlaying, rpm, playBeat]);
+      // Cargar audios
+      const { data: audiosData } = await supabase
+        .from("session_audios")
+        .select("*")
+        .eq("cult_id", profile.cult_id)
+        .order("created_at", { ascending: false });
+      setAudios(audiosData || []);
 
-  const tapBeat = () => {
-    initAudio();
+      // Cargar fieles disponibles (solo para deidades)
+      if (isDeity) {
+        const { data: followersData } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .eq("cult_id", profile.cult_id)
+          .eq("role", "follower");
+        setAvailableFollowers(followersData || []);
+      }
+
+      // Verificar sesión activa
+      const { data: sessionData } = await supabase
+        .from("active_sessions")
+        .select("*")
+        .eq(isDeity ? "deity_id" : "id", user.id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (sessionData) {
+        setActiveSession(sessionData);
+        setSelectedFollowers(sessionData.follower_ids || []);
+        setRpm(sessionData.current_rpm);
+        setIsPlaying(sessionData.is_playing);
+        if (isDeity) {
+          setIsMuted(sessionData.is_muted_for_deity);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading session data:", error);
+    }
+
+    setIsLoading(false);
+  };
+
+  const playBeat = () => {
+    if (isMuted && isDeity) return;
+    if (!audioContextRef.current) return;
+
+    const ctx = audioContextRef.current;
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.frequency.value = 440; // La 440Hz
+    oscillator.type = "sine";
+
+    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.1);
+  };
+
+  const animateBeatCircle = () => {
+    setBeatScale(1.5);
+    setTimeout(() => setBeatScale(1), 150);
+  };
+
+  const togglePlay = async () => {
+    const newState = !isPlaying;
+    setIsPlaying(newState);
+
+    if (activeSession && isDeity) {
+      await supabase
+        .from("active_sessions")
+        .update({ is_playing: newState, updated_at: new Date().toISOString() })
+        .eq("id", activeSession.id);
+    }
+  };
+
+  const toggleMute = async () => {
+    const newState = !isMuted;
+    setIsMuted(newState);
+
+    if (activeSession && isDeity) {
+      await supabase
+        .from("active_sessions")
+        .update({ is_muted_for_deity: newState, updated_at: new Date().toISOString() })
+        .eq("id", activeSession.id);
+    }
+  };
+
+  const handleRpmChange = async (value: number[]) => {
+    const newRpm = value[0];
+    setRpm(newRpm);
+
+    if (activeSession && isDeity) {
+      await supabase
+        .from("active_sessions")
+        .update({ current_rpm: newRpm, updated_at: new Date().toISOString() })
+        .eq("id", activeSession.id);
+    }
+  };
+
+  const manualBeat = () => {
     playBeat();
-    setCirclePhase(p => (p + 1) % 2);
+    animateBeatCircle();
+
+    if (isRecording) {
+      const now = Date.now();
+      if (lastBeatTime !== null) {
+        const interval = now - lastBeatTime;
+        setRecordedIntervals([...recordedIntervals, interval]);
+      }
+      setLastBeatTime(now);
+    }
   };
 
-  return {
-    rpm, setRpm,
-    isPlaying, setIsPlaying,
-    isMuted, setIsMuted,
-    tapMode, setTapMode,
-    currentPattern, setCurrentPattern,
-    circlePhase,
-    tapBeat,
-  };
-}
-
-// ============== COMPONENTS ==============
-export default function SesionPage() {
-  const {
-    rpm, setRpm,
-    isPlaying, setIsPlaying,
-    isMuted, setIsMuted,
-    tapMode, setTapMode,
-    circlePhase,
-    tapBeat,
-  } = useBeatEngine();
-
-  const [activeTab, setActiveTab] = useState<"beats" | "cards" | "patterns">("beats");
-  const [cards, setCards] = useState([
-    { id: "1", title: "Arrodíllate", description: "Postrate ante tu deidad", type: "position", duration: null as number | null },
-    { id: "2", title: "Silencio", description: "No hables hasta nueva orden", type: "action", duration: 300 },
-    { id: "3", title: "Presentate", description: "Muéstrate completamente", type: "action", duration: null },
-  ]);
-  const [activeCard, setActiveCard] = useState<string | null>(null);
-  const [showTimeOnFollower, setShowTimeOnFollower] = useState(false);
-  const [patterns, setPatterns] = useState(defaultPatterns);
-  const [newPatternName, setNewPatternName] = useState("");
-
-  const sendCard = (cardId: string) => {
-    setActiveCard(cardId);
+  const startRecording = () => {
+    setIsRecording(true);
+    setRecordedIntervals([]);
+    setLastBeatTime(null);
+    toast({
+      title: "Grabando patrón",
+      description: "Pulsa el botón de beat siguiendo el ritmo deseado",
+    });
   };
 
-  const removeCard = (id: string) => {
-    setCards(cards.filter(c => c.id !== id));
-    if (activeCard === id) setActiveCard(null);
+  const stopRecording = () => {
+    setIsRecording(false);
+    setLastBeatTime(null);
   };
+
+  const savePattern = async () => {
+    if (!newPatternName.trim() || recordedIntervals.length < 2 || !profile?.cult_id || !user) return;
+
+    const { error } = await supabase.from("beat_patterns").insert({
+      cult_id: profile.cult_id,
+      created_by: user.id,
+      name: newPatternName,
+      intervals: recordedIntervals,
+    });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo guardar el patrón: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Patrón guardado",
+        description: `${newPatternName} se ha guardado correctamente`,
+      });
+      setNewPatternName("");
+      setRecordedIntervals([]);
+      setIsRecording(false);
+      loadData();
+    }
+  };
+
+  const deletePattern = async (id: string) => {
+    const { error } = await supabase.from("beat_patterns").delete().eq("id", id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo eliminar: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Patrón eliminado" });
+      loadData();
+    }
+  };
+
+  const createCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCardTitle.trim() || !user || !profile?.cult_id) return;
+
+    const { error } = await supabase.from("session_cards").insert({
+      cult_id: profile.cult_id,
+      created_by: user.id,
+      card_type: newCardType,
+      title: newCardTitle,
+      description: newCardDescription || null,
+    });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo crear la tarjeta: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Tarjeta creada" });
+      setNewCardTitle("");
+      setNewCardDescription("");
+      setShowCardForm(false);
+      loadData();
+    }
+  };
+
+  const deleteCard = async (id: string, isOfficial: boolean) => {
+    if (isOfficial) {
+      toast({
+        title: "No permitido",
+        description: "No puedes eliminar tarjetas oficiales",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase.from("session_cards").delete().eq("id", id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo eliminar: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Tarjeta eliminada" });
+      loadData();
+    }
+  };
+
+  const sendCard = async (card: SessionCard, duration: number | null, showTimer: boolean) => {
+    if (!activeSession || !isDeity) return;
+
+    await supabase
+      .from("active_sessions")
+      .update({
+        current_card_id: card.id,
+        card_duration_seconds: duration,
+        card_show_timer: showTimer,
+        card_started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", activeSession.id);
+
+    setActiveCard(card);
+    setCardDuration(duration);
+    setShowTimer(showTimer);
+    setCardTimeLeft(duration);
+  };
+
+  const removeCard = async () => {
+    if (!activeSession || !isDeity) return;
+
+    await supabase
+      .from("active_sessions")
+      .update({
+        current_card_id: null,
+        card_duration_seconds: null,
+        card_show_timer: true,
+        card_started_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", activeSession.id);
+
+    setActiveCard(null);
+    setCardDuration(null);
+    setCardTimeLeft(null);
+  };
+
+  const startSession = async () => {
+    if (!user || !profile?.cult_id || selectedFollowers.length === 0) {
+      toast({
+        title: "Selecciona fieles",
+        description: "Debes seleccionar al menos un fiel para iniciar la sesión",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("active_sessions")
+      .insert({
+        cult_id: profile.cult_id,
+        deity_id: user.id,
+        follower_ids: selectedFollowers,
+        current_rpm: rpm,
+        is_playing: false,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo iniciar la sesión: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      setActiveSession(data);
+      toast({ title: "Sesión iniciada" });
+    }
+  };
+
+  const endSession = async () => {
+    if (!activeSession || !isDeity) return;
+
+    await supabase.from("active_sessions").update({ is_active: false }).eq("id", activeSession.id);
+
+    setActiveSession(null);
+    setSelectedFollowers([]);
+    setIsPlaying(false);
+    setActiveCard(null);
+    toast({ title: "Sesión finalizada" });
+  };
+
+  const toggleFollowerSelection = (followerId: string) => {
+    setSelectedFollowers((prev) =>
+      prev.includes(followerId)
+        ? prev.filter((id) => id !== followerId)
+        : [...prev, followerId]
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <AppLayout title="Sesión" icon={<Radio className="w-5 h-5" />}>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-gold animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
-    <AppLayout title="Sesión Ritual" icon={<Zap className="w-5 h-5" />}>
+    <AppLayout title="Sesión BDSM" icon={<Radio className="w-5 h-5" />}>
       <BookPage pageKey="sesion">
         <div className="space-y-6">
           <div className="text-center space-y-2">
-            <h1 className="font-display text-3xl text-foreground">El Ritual de Dominación</h1>
-            <p className="font-body text-muted-foreground">Controla cada latido de la sesión</p>
+            <h1 className="font-display text-3xl text-foreground">Control Ritual</h1>
+            <p className="font-body text-muted-foreground">
+              {isDeity ? "Dirección de la sesión" : "Seguimiento de la sesión"}
+            </p>
           </div>
 
-          {/* Tabs */}
-          <div className="flex justify-center gap-2 border-b border-border/40 pb-4">
-            {[
-              { key: "beats" as const, label: "Beats", icon: <Heart className="w-4 h-4" /> },
-              { key: "cards" as const, label: "Tarjetas", icon: <ChevronRight className="w-4 h-4" /> },
-              { key: "patterns" as const, label: "Patrones", icon: <Settings className="w-4 h-4" /> },
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-sm font-heading text-sm transition-all
-                  ${activeTab === tab.key 
-                    ? "bg-gold/20 text-gold border border-gold/40" 
-                    : "text-muted-foreground hover:text-foreground border border-transparent"
-                  }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* BEATS PANEL */}
-          {activeTab === "beats" && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Visualizador circular */}
-              <div className="flex justify-center">
-                <div className="relative w-48 h-48">
-                  <div className="absolute inset-0 rounded-full border-2 border-border/40" />
-                  <motion.div
-                    animate={{
-                      scale: circlePhase === 0 ? [1, 1.15, 1] : 1,
-                      opacity: circlePhase === 0 ? [0.6, 1, 0.6] : 0.6,
-                    }}
-                    transition={{ duration: 60 / rpm }}
-                    className="absolute inset-4 rounded-full bg-gradient-to-b from-wine/30 to-wine/5 border border-wine/30"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <span className="font-display text-4xl text-foreground">{rpm}</span>
-                      <p className="font-heading text-xs text-muted-foreground">RPM</p>
-                    </div>
-                  </div>
-                  {/* Indicador de posición */}
-                  <motion.div
-                    animate={{ rotate: circlePhase === 0 ? 0 : 180 }}
-                    transition={{ duration: 0.3 }}
-                    className="absolute top-2 left-1/2 -translate-x-1/2 w-1 h-4 bg-gold rounded-full"
-                  />
-                </div>
-              </div>
-
-              {/* Controles */}
-              <ParchmentCard title="Control del Ritmo" icon={<Settings className="w-4 h-4" />}>
-                <div className="space-y-4">
-                  {/* Slider RPM */}
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span className="font-heading text-xs text-muted-foreground">Velocidad</span>
-                      <span className="font-display text-gold">{rpm} RPM</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="20"
-                      max="200"
-                      value={rpm}
-                      onChange={(e) => setRpm(parseInt(e.target.value))}
-                      className="w-full h-2 bg-muted rounded-full appearance-none cursor-pointer accent-gold"
-                    />
-                    <div className="flex justify-between mt-1 text-xs text-muted-foreground/50 font-body">
-                      <span>Lento</span>
-                      <span>Rápido</span>
-                    </div>
-                  </div>
-
-                  {/* Botones de control */}
-                  <div className="flex justify-center gap-3">
-                    <button
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      className={`p-4 rounded-full border-2 transition-all ${
-                        isPlaying 
-                          ? "bg-wine/20 border-wine text-wine" 
-                          : "bg-gold/20 border-gold text-gold"
-                      }`}
-                    >
-                      {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-                    </button>
-
-                    <button
-                      onClick={() => setIsMuted(!isMuted)}
-                      className={`p-4 rounded-full border-2 transition-all ${
-                        isMuted 
-                          ? "border-muted-foreground/30 text-muted-foreground" 
-                          : "border-foreground/30 text-foreground"
-                      }`}
-                    >
-                      {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-                    </button>
-
-                    <button
-                      onClick={() => setTapMode(!tapMode)}
-                      className={`p-4 rounded-full border-2 transition-all ${
-                        tapMode 
-                          ? "bg-gold/20 border-gold text-gold" 
-                          : "border-border/40 text-muted-foreground"
-                      }`}
-                    >
-                      <Zap className="w-6 h-6" />
-                    </button>
-                  </div>
-
-                  {tapMode && (
-                    <motion.button
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      onMouseDown={tapBeat}
-                      onTouchStart={tapBeat}
-                      className="w-full py-8 bg-wine/10 border-2 border-wine/30 rounded-sm
-                                 active:bg-wine/30 active:scale-95 transition-all"
-                    >
-                      <span className="font-display text-xl text-wine">TOCA PARA EL BEAT</span>
-                    </motion.button>
-                  )}
-                </div>
-              </ParchmentCard>
-            </motion.div>
-          )}
-
-          {/* CARDS PANEL */}
-          {activeTab === "cards" && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Tarjeta activa */}
-              <AnimatePresence>
-                {activeCard && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                  >
-                    <ParchmentCard 
-                      title="Orden Activa" 
-                      icon={<Heart className="w-4 h-4 text-wine" />}
-                      className="border-wine/40 bg-wine/5"
-                    >
-                      {(() => {
-                        const card = cards.find(c => c.id === activeCard);
-                        return card ? (
-                          <div className="text-center space-y-3">
-                            <h3 className="font-display text-2xl text-foreground">{card.title}</h3>
-                            <p className="font-body text-muted-foreground">{card.description}</p>
-                            {card.duration && (
-                              <div className="flex items-center justify-center gap-2 text-gold">
-                                <Clock className="w-4 h-4" />
-                                <span className="font-heading text-sm">
-                                  {showTimeOnFollower ? `${card.duration}s` : "Tiempo oculto"}
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex items-center justify-center gap-2 pt-2">
-                              <label className="flex items-center gap-2 text-sm font-body text-muted-foreground cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={showTimeOnFollower}
-                                  onChange={(e) => setShowTimeOnFollower(e.target.checked)}
-                                  className="accent-gold"
-                                />
-                                Mostrar tiempo al fiel
-                              </label>
-                            </div>
-                            <RitualButton variant="wine" onClick={() => setActiveCard(null)}>
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Retirar Orden
-                            </RitualButton>
-                          </div>
-                        ) : null;
-                      })()}
-                    </ParchmentCard>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Lista de tarjetas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {cards.map((card) => (
-                  <motion.div
-                    key={card.id}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <button
-                      onClick={() => sendCard(card.id)}
-                      className={`w-full text-left p-4 rounded-sm border transition-all ${
-                        activeCard === card.id
-                          ? "bg-wine/10 border-wine/50"
-                          : "bg-card/40 border-border/40 hover:border-gold/30"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-heading text-sm text-foreground">{card.title}</h4>
-                          <p className="font-body text-xs text-muted-foreground mt-1">{card.description}</p>
-                        </div>
-                        <Send className={`w-4 h-4 ${activeCard === card.id ? "text-wine" : "text-muted-foreground/40"}`} />
-                      </div>
-                    </button>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Audio messages */}
-              <ParchmentCard title="Mensajes de Voz" icon={<Mic className="w-4 h-4" />}>
-                <div className="text-center space-y-3 py-4">
-                  <div className="w-16 h-16 rounded-full border-2 border-dashed border-border/50 
-                                  flex items-center justify-center mx-auto">
-                    <Mic className="w-6 h-6 text-muted-foreground/30" />
-                  </div>
-                  <p className="font-body text-sm text-muted-foreground">
-                    Graba mensajes de audio de hasta 30 segundos<br />
-                    para enviar durante la sesión
-                  </p>
-                  <RitualButton variant="outline" className="text-sm">
-                    <Mic className="w-4 h-4 mr-2" />
-                    Grabar Mensaje
-                  </RitualButton>
-                </div>
-              </ParchmentCard>
-            </motion.div>
-          )}
-
-          {/* PATTERNS PANEL */}
-          {activeTab === "patterns" && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
+          {/* Selección de fieles (solo deidades sin sesión activa) */}
+          {isDeity && !activeSession && (
+            <ParchmentCard title="Seleccionar Fieles" icon={<Users className="w-4 h-4" />}>
               <div className="space-y-3">
-                {patterns.map((pattern) => (
-                  <ParchmentCard key={pattern.id} title={pattern.name}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-1">
-                        {pattern.beats.map((_, i) => (
-                          <div key={i} className="w-3 h-3 rounded-full bg-gold/60" />
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {/* set pattern */}}
-                          className="px-3 py-1 text-xs font-heading text-gold border border-gold/40 rounded-sm
-                                     hover:bg-gold/10 transition-colors"
-                        >
-                          Usar
-                        </button>
-                        <button
-                          onClick={() => setPatterns(patterns.filter(p => p.id !== pattern.id))}
-                          className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </ParchmentCard>
-                ))}
-              </div>
-
-              <ParchmentCard title="Crear Patrón" icon={<Plus className="w-4 h-4" />}>
-                <div className="space-y-4">
-                  <input
-                    value={newPatternName}
-                    onChange={(e) => setNewPatternName(e.target.value)}
-                    placeholder="Nombre del patrón..."
-                    className="w-full bg-background/50 border border-border rounded-sm px-4 py-2
-                               text-foreground font-body focus:outline-none focus:border-gold/50"
-                  />
-                  <p className="font-body text-sm text-muted-foreground">
-                    Los patrones te permiten crear secuencias de beats personalizadas:<br />
-                    Ej: 3 beats rápidos, pausa, 2 beats lentos, repetir...
+                {availableFollowers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No hay fieles disponibles
                   </p>
-                  <RitualButton variant="gold">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Guardar Patrón
+                ) : (
+                  availableFollowers.map((follower) => (
+                    <motion.button
+                      key={follower.id}
+                      onClick={() => toggleFollowerSelection(follower.id)}
+                      className={`
+                        w-full flex items-center gap-3 p-3 rounded-sm border transition-all
+                        ${
+                          selectedFollowers.includes(follower.id)
+                            ? "bg-gold/20 border-gold/60"
+                            : "bg-background/50 border-border/30 hover:border-gold/40"
+                        }
+                      `}
+                    >
+                      <Avatar className="w-10 h-10 border-2 border-gold/30">
+                        <AvatarImage src={follower.avatar_url || undefined} />
+                        <AvatarFallback className="bg-muted text-foreground font-display">
+                          {follower.display_name?.[0] || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-heading text-sm text-foreground">
+                        {follower.display_name || "Sin nombre"}
+                      </span>
+                    </motion.button>
+                  ))
+                )}
+                {selectedFollowers.length > 0 && (
+                  <RitualButton variant="gold" onClick={startSession} className="w-full mt-4">
+                    <Zap className="w-4 h-4 mr-2" />
+                    Iniciar Sesión
                   </RitualButton>
+                )}
+              </div>
+            </ParchmentCard>
+          )}
+
+          {/* Controles de Beat */}
+          {activeSession && (
+            <ParchmentCard title="Control de Ritmo" icon={<Circle className="w-4 h-4" />}>
+              <div className="space-y-6">
+                {/* Visualización del beat */}
+                <div className="flex items-center justify-center py-8">
+                  <motion.div
+                    animate={{ scale: beatScale }}
+                    transition={{ type: "spring", stiffness: 300, damping: 10 }}
+                    className="w-32 h-32 rounded-full bg-gradient-to-br from-wine/40 to-gold/40 
+                             border-4 border-gold/60 shadow-lg shadow-gold/20"
+                  />
                 </div>
-              </ParchmentCard>
-            </motion.div>
+
+                {/* Controles */}
+                {isDeity && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="font-heading text-xs text-muted-foreground uppercase">
+                        RPM: {rpm}
+                      </label>
+                      <Slider
+                        value={[rpm]}
+                        onValueChange={handleRpmChange}
+                        min={30}
+                        max={180}
+                        step={5}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <RitualButton
+                        variant={isPlaying ? "outline" : "gold"}
+                        onClick={togglePlay}
+                        className="flex-1"
+                      >
+                        {isPlaying ? (
+                          <>
+                            <Pause className="w-4 h-4 mr-2" />
+                            Pausar
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4 mr-2" />
+                            Reproducir
+                          </>
+                        )}
+                      </RitualButton>
+
+                      <RitualButton variant="outline" onClick={toggleMute}>
+                        {isMuted ? (
+                          <VolumeX className="w-4 h-4" />
+                        ) : (
+                          <Volume2 className="w-4 h-4" />
+                        )}
+                      </RitualButton>
+
+                      <RitualButton variant="outline" onClick={manualBeat}>
+                        <Circle className="w-4 h-4" />
+                      </RitualButton>
+                    </div>
+
+                    {/* Botón para finalizar sesión */}
+                    <RitualButton variant="outline" onClick={endSession} className="w-full">
+                      <StopCircle className="w-4 h-4 mr-2" />
+                      Finalizar Sesión
+                    </RitualButton>
+                  </div>
+                )}
+
+                {/* Solo beat visual para fieles */}
+                {!isDeity && (
+                  <div className="text-center">
+                    <p className="font-body text-sm text-muted-foreground">
+                      {isPlaying ? `Ritmo: ${rpm} RPM` : "En pausa"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </ParchmentCard>
+          )}
+
+          {/* Tarjeta activa */}
+          <AnimatePresence>
+            {activeCard && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <ParchmentCard title="Tarjeta Activa" icon={<Zap className="w-4 h-4" />}>
+                  <div className="space-y-3">
+                    <div className="p-4 bg-gold/10 rounded-sm border border-gold/30">
+                      <h3 className="font-display text-lg text-foreground mb-2">
+                        {activeCard.title}
+                      </h3>
+                      {activeCard.description && (
+                        <p className="font-body text-sm text-muted-foreground">
+                          {activeCard.description}
+                        </p>
+                      )}
+                    </div>
+                    {cardTimeLeft !== null && showTimer && (
+                      <div className="text-center">
+                        <span className="font-mono text-2xl text-gold">
+                          {Math.floor(cardTimeLeft / 60)}:{(cardTimeLeft % 60).toString().padStart(2, "0")}
+                        </span>
+                      </div>
+                    )}
+                    {isDeity && (
+                      <RitualButton variant="outline" onClick={removeCard} className="w-full">
+                        <X className="w-4 h-4 mr-2" />
+                        Retirar Tarjeta
+                      </RitualButton>
+                    )}
+                  </div>
+                </ParchmentCard>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Tabs para deidades */}
+          {isDeity && activeSession && (
+            <Tabs defaultValue="cards" className="space-y-4">
+              <TabsList className="grid grid-cols-3 gap-1 bg-muted/30 p-1">
+                <TabsTrigger value="cards">Tarjetas</TabsTrigger>
+                <TabsTrigger value="patterns">Patrones</TabsTrigger>
+                <TabsTrigger value="audios">Audios</TabsTrigger>
+              </TabsList>
+
+              {/* Tab: Tarjetas */}
+              <TabsContent value="cards" className="space-y-4">
+                <ParchmentCard title="Tarjetas" icon={<Plus className="w-4 h-4" />}>
+                  <div className="space-y-3">
+                    {!showCardForm ? (
+                      <RitualButton
+                        variant="outline"
+                        onClick={() => setShowCardForm(true)}
+                        className="w-full"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nueva Tarjeta
+                      </RitualButton>
+                    ) : (
+                      <form onSubmit={createCard} className="space-y-3">
+                        <select
+                          value={newCardType}
+                          onChange={(e) => setNewCardType(e.target.value)}
+                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                                   text-foreground font-body focus:outline-none focus:border-gold/50"
+                        >
+                          <option value="action">Acción</option>
+                          <option value="position">Posición</option>
+                          <option value="indication">Indicación</option>
+                          <option value="custom">Personalizada</option>
+                        </select>
+                        <input
+                          value={newCardTitle}
+                          onChange={(e) => setNewCardTitle(e.target.value)}
+                          placeholder="Título"
+                          required
+                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                                   text-foreground font-body focus:outline-none focus:border-gold/50"
+                        />
+                        <textarea
+                          value={newCardDescription}
+                          onChange={(e) => setNewCardDescription(e.target.value)}
+                          placeholder="Descripción (opcional)"
+                          rows={2}
+                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                                   text-foreground font-body focus:outline-none focus:border-gold/50 resize-none"
+                        />
+                        <div className="flex gap-2">
+                          <RitualButton type="submit" variant="gold" className="flex-1">
+                            Guardar
+                          </RitualButton>
+                          <button
+                            type="button"
+                            onClick={() => setShowCardForm(false)}
+                            className="px-4 text-sm text-muted-foreground hover:text-foreground"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {cards.map((card) => (
+                        <div
+                          key={card.id}
+                          className="flex items-start gap-2 p-3 bg-background/50 rounded-sm border border-border/30"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-heading text-sm text-foreground truncate">
+                                {card.title}
+                              </h4>
+                              {card.is_official && (
+                                <Badge variant="outline" className="text-xs">
+                                  Oficial
+                                </Badge>
+                              )}
+                            </div>
+                            {card.description && (
+                              <p className="text-xs text-muted-foreground">{card.description}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => sendCard(card, 60, true)}
+                              className="p-1 text-gold hover:text-gold/80 transition-colors"
+                              title="Enviar (1 min)"
+                            >
+                              <Play className="w-4 h-4" />
+                            </button>
+                            {!card.is_official && (
+                              <button
+                                onClick={() => deleteCard(card.id, card.is_official)}
+                                className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </ParchmentCard>
+              </TabsContent>
+
+              {/* Tab: Patrones */}
+              <TabsContent value="patterns" className="space-y-4">
+                <ParchmentCard title="Patrones de Beat" icon={<Radio className="w-4 h-4" />}>
+                  <div className="space-y-3">
+                    {!isRecording ? (
+                      <RitualButton
+                        variant="outline"
+                        onClick={startRecording}
+                        className="w-full"
+                      >
+                        <Mic className="w-4 h-4 mr-2" />
+                        Grabar Patrón
+                      </RitualButton>
+                    ) : (
+                      <div className="space-y-3 p-4 bg-wine/10 rounded-sm border border-wine/30">
+                        <p className="font-body text-sm text-muted-foreground text-center">
+                          Grabando... Pulsa el beat siguiendo tu ritmo
+                        </p>
+                        <RitualButton onClick={manualBeat} className="w-full">
+                          <Circle className="w-4 h-4 mr-2" />
+                          Beat
+                        </RitualButton>
+                        <p className="text-xs text-center text-muted-foreground">
+                          {recordedIntervals.length} beats grabados
+                        </p>
+                        <div className="flex gap-2">
+                          <RitualButton
+                            variant="gold"
+                            onClick={stopRecording}
+                            className="flex-1"
+                          >
+                            <StopCircle className="w-4 h-4 mr-2" />
+                            Detener
+                          </RitualButton>
+                        </div>
+                      </div>
+                    )}
+
+                    {recordedIntervals.length >= 2 && !isRecording && (
+                      <div className="space-y-2 p-3 bg-gold/10 rounded-sm border border-gold/30">
+                        <input
+                          value={newPatternName}
+                          onChange={(e) => setNewPatternName(e.target.value)}
+                          placeholder="Nombre del patrón"
+                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                                   text-foreground font-body focus:outline-none focus:border-gold/50"
+                        />
+                        <RitualButton
+                          variant="gold"
+                          onClick={savePattern}
+                          className="w-full"
+                        >
+                          <Save className="w-4 h-4 mr-2" />
+                          Guardar Patrón
+                        </RitualButton>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {patterns.map((pattern) => (
+                        <div
+                          key={pattern.id}
+                          className="flex items-center justify-between p-3 bg-background/50 rounded-sm border border-border/30"
+                        >
+                          <div>
+                            <h4 className="font-heading text-sm text-foreground">{pattern.name}</h4>
+                            <p className="text-xs text-muted-foreground">
+                              {pattern.intervals.length} beats
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => deletePattern(pattern.id)}
+                            className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </ParchmentCard>
+              </TabsContent>
+
+              {/* Tab: Audios */}
+              <TabsContent value="audios" className="space-y-4">
+                <ParchmentCard title="Mensajes de Audio" icon={<FileAudio className="w-4 h-4" />}>
+                  <div className="space-y-3">
+                    <p className="font-body text-sm text-muted-foreground text-center py-8">
+                      Función de grabación de audio próximamente
+                    </p>
+                  </div>
+                </ParchmentCard>
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       </BookPage>
