@@ -196,8 +196,13 @@ function CreateCultForm({ onBack }: { onBack: () => void }) {
         </div>
       </ParchmentCard>
 
-      <RitualButton type="submit" variant="gold" className="w-full" disabled={isLoading}>
-        {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Fundar Culto"}
+      <RitualButton
+        onClick={() => router.push("/dashboard")}
+        variant="gold"
+        className="w-full"
+      >
+        <ArrowRight className="w-5 h-5 mr-2" />
+        Ir al Culto
       </RitualButton>
     </form>
   );

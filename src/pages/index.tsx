@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/router";
-import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle, Check } from "lucide-react";
+import { Book, Flame, Loader2, ChevronRight, Crown, Heart, Shield, AlertTriangle, Check, ArrowRight } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { useAuth } from "@/contexts/AuthContext";
