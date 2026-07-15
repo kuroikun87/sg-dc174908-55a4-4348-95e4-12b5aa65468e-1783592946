@@ -28,4 +28,5 @@ export interface UserProfile {
   bio: string | null;
   pronouns: string | null;
   birth_date: string | null;
+  faith_points: number | null;
 }
