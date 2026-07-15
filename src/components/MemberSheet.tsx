@@ -603,26 +603,141 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                   </div>
                 </ParchmentCard>
 
-                <ParchmentCard title="Próximos Eventos" icon={<Calendar className="w-4 h-4" />}>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {events.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Sin eventos</p>
-                    ) : (
-                      events.map((event) => {
-                        const eventDate = new Date(event.event_date);
-                        return (
-                          <div key={event.id} className="p-3 bg-background/50 rounded-sm border border-border/20">
-                            <p className="font-heading text-sm text-foreground">{event.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {eventDate.toLocaleDateString()}
-                              {event.event_time && ` · ${event.event_time}`}
-                            </p>
-                          </div>
-                        );
-                      })
+                {/* Calendario */}
+                {isDeity && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gold" />
+                        <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Calendario</h3>
+                      </div>
+                      <button
+                        onClick={() => setShowEventForm(!showEventForm)}
+                        className="text-xs text-gold hover:text-gold/80 transition-colors"
+                      >
+                        {showEventForm ? "Cancelar" : "+ Nuevo Evento"}
+                      </button>
+                    </div>
+
+                    {/* Formulario para crear evento */}
+                    {showEventForm && (
+                      <div className="p-3 bg-background/50 rounded-sm border border-gold/30 space-y-3">
+                        <Input
+                          placeholder="Título del evento"
+                          value={eventForm.title}
+                          onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                        />
+                        <Input
+                          type="date"
+                          value={eventForm.date}
+                          onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                        />
+                        <Input
+                          type="time"
+                          placeholder="Hora (opcional)"
+                          value={eventForm.time}
+                          onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+                        />
+                        <Textarea
+                          placeholder="Notas (opcional)"
+                          value={eventForm.notes}
+                          onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
+                          rows={2}
+                        />
+                        <div className="flex gap-2">
+                          <RitualButton
+                            variant="gold"
+                            onClick={saveEvent}
+                            disabled={!eventForm.title.trim() || !eventForm.date}
+                            className="flex-1"
+                          >
+                            {editingEvent ? "Actualizar" : "Crear Evento"}
+                          </RitualButton>
+                          {editingEvent && (
+                            <RitualButton
+                              variant="outline"
+                              onClick={() => {
+                                setEditingEvent(null);
+                                setEventForm({ title: "", date: "", time: "", notes: "" });
+                              }}
+                            >
+                              Cancelar
+                            </RitualButton>
+                          )}
+                        </div>
+                      </div>
                     )}
+
+                    {/* Lista de eventos */}
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {events.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No hay eventos en el calendario
+                        </p>
+                      ) : (
+                        events.map((event) => {
+                          const isDeityEvent = event.created_by !== memberId;
+                          return (
+                            <div
+                              key={event.id}
+                              className={`
+                                p-3 bg-background/50 rounded-sm space-y-2
+                                ${isDeityEvent ? "border-2 border-gold/60" : "border border-border/30"}
+                              `}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-heading text-sm text-foreground">
+                                      {event.title}
+                                    </h4>
+                                    {isDeityEvent && (
+                                      <Badge variant="outline" className="text-xs bg-gold/10 text-gold border-gold/30">
+                                        Deidad
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {new Date(event.event_date).toLocaleDateString()}
+                                    {event.event_time && ` - ${event.event_time}`}
+                                  </p>
+                                  {event.notes && (
+                                    <p className="text-xs text-muted-foreground mt-1">{event.notes}</p>
+                                  )}
+                                </div>
+                                {isDeityEvent && (
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => {
+                                        setEditingEvent(event);
+                                        setEventForm({
+                                          title: event.title,
+                                          date: event.event_date,
+                                          time: event.event_time || "",
+                                          notes: event.notes || "",
+                                        });
+                                        setShowEventForm(true);
+                                      }}
+                                      className="p-1.5 text-gold hover:text-gold/80 transition-colors"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => deleteEvent(event.id)}
+                                      className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                </ParchmentCard>
+                )}
 
                 <ParchmentCard title="Historial de Fe" icon={<Sparkles className="w-4 h-4" />}>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
