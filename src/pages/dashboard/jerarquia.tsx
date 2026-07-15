@@ -5,6 +5,7 @@ import { BookPage } from "@/components/layout/BookPage";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 interface HierarchyPerson {
   id: string;
@@ -18,65 +19,106 @@ interface HierarchyPerson {
 
 export default function JerarquiaPage() {
   const { profile } = useAuth();
+  const { toast } = useToast();
   const [mainDeity, setMainDeity] = useState<HierarchyPerson | null>(null);
   const [deities, setDeities] = useState<HierarchyPerson[]>([]);
   const [followers, setFollowers] = useState<HierarchyPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchHierarchy = async () => {
-      if (!profile?.cult_id) {
-        setIsLoading(false);
-        return;
-      }
+    fetchHierarchy();
+  }, [profile?.cult_id]);
 
+  const fetchHierarchy = async () => {
+    if (!profile?.cult_id) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
       // Fetch main deity
-      const { data: cultData } = await supabase
+      const { data: cultData, error: cultError } = await supabase
         .from("cults")
         .select("main_deity_id")
         .eq("id", profile.cult_id)
         .single();
 
+      if (cultError) throw cultError;
+
       if (cultData?.main_deity_id) {
-        const { data: mainDeityData } = await supabase
+        const { data: mainDeityData, error: mainDeityError } = await supabase
           .from("profiles")
           .select("id, display_name, title, role, is_main_deity, avatar_url")
           .eq("id", cultData.main_deity_id)
-          .single();
+          .maybeSingle();
         
-        if (mainDeityData) setMainDeity(mainDeityData as HierarchyPerson);
+        if (!mainDeityError && mainDeityData) {
+          setMainDeity(mainDeityData as HierarchyPerson);
+        }
       }
 
-      // Fetch other deities
-      const { data: deitiesData } = await supabase
+      // Fetch all profiles from the cult
+      const { data: allProfiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, display_name, title, role, is_main_deity, avatar_url")
-        .eq("cult_id", profile.cult_id)
-        .eq("role", "deity")
-        .neq("id", cultData?.main_deity_id || "");
+        .select("id, display_name, title, role, is_main_deity, avatar_url, rank_id")
+        .eq("cult_id", profile.cult_id);
 
-      if (deitiesData) setDeities(deitiesData as HierarchyPerson[]);
+      if (profilesError) throw profilesError;
 
-      // Fetch followers with their ranks
-      const { data: followersData } = await supabase
-        .from("profiles")
-        .select("id, display_name, title, role, is_main_deity, avatar_url, ranks(name)")
-        .eq("cult_id", profile.cult_id)
-        .eq("role", "follower");
+      if (allProfiles) {
+        // Get all rank_ids to fetch rank names
+        const rankIds = allProfiles
+          .map(p => (p as any).rank_id)
+          .filter(Boolean);
 
-      if (followersData) {
-        const formattedFollowers = followersData.map((f: any) => ({
-          ...f,
-          rank_name: f.ranks?.name || null,
-        })) as HierarchyPerson[];
-        setFollowers(formattedFollowers);
+        let ranksMap: Record<string, string> = {};
+        if (rankIds.length > 0) {
+          const { data: ranksData } = await supabase
+            .from("ranks")
+            .select("id, name")
+            .in("id", rankIds);
+
+          if (ranksData) {
+            ranksMap = Object.fromEntries(ranksData.map(r => [r.id, r.name]));
+          }
+        }
+
+        // Separate deities and followers
+        const deitiesList: HierarchyPerson[] = [];
+        const followersList: HierarchyPerson[] = [];
+
+        allProfiles.forEach((p: any) => {
+          const person: HierarchyPerson = {
+            id: p.id,
+            display_name: p.display_name,
+            title: p.title,
+            role: p.role,
+            is_main_deity: p.is_main_deity,
+            avatar_url: p.avatar_url,
+            rank_name: p.rank_id ? ranksMap[p.rank_id] : null,
+          };
+
+          if (p.role === "deity" && p.id !== cultData?.main_deity_id) {
+            deitiesList.push(person);
+          } else if (p.role === "follower") {
+            followersList.push(person);
+          }
+        });
+
+        setDeities(deitiesList);
+        setFollowers(followersList);
       }
-
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Error desconocido";
+      toast({
+        title: "Error",
+        description: `No se pudo cargar la jerarquía: ${msg}`,
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    };
-
-    fetchHierarchy();
-  }, [profile?.cult_id]);
+    }
+  };
 
   function HierarchyNode({ person, isMain = false, isDeity = false }: { person: HierarchyPerson; isMain?: boolean; isDeity?: boolean }) {
     return (
@@ -157,7 +199,7 @@ export default function JerarquiaPage() {
             {/* Nivel 1: Deidades menores */}
             {deities.length > 0 && (
               <>
-                <div className="flex gap-6 items-start">
+                <div className="flex gap-6 items-start flex-wrap justify-center">
                   {deities.map((deity) => (
                     <div key={deity.id} className="relative">
                       <HierarchyNode person={deity} isDeity />

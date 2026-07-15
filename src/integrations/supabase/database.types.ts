@@ -325,6 +325,7 @@ export type Database = {
           full_name: string | null
           id: string
           is_main_deity: boolean | null
+          rank_id: string | null
           role: string | null
           title: string | null
           updated_at: string | null
@@ -338,6 +339,7 @@ export type Database = {
           full_name?: string | null
           id: string
           is_main_deity?: boolean | null
+          rank_id?: string | null
           role?: string | null
           title?: string | null
           updated_at?: string | null
@@ -351,11 +353,20 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_main_deity?: boolean | null
+          rank_id?: string | null
           role?: string | null
           title?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       punishments: {
         Row: {

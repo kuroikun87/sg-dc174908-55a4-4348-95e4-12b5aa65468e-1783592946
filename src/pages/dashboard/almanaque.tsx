@@ -1,20 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, X, Sun, Moon, Star, AlertCircle } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, X, Sun, Moon, Star, AlertCircle, Loader2 } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { RitualButton } from "@/components/ui/ritual-button";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 interface CalendarEvent {
   id: string;
   title: string;
-  type: "free" | "busy" | "event" | "ritual" | "note";
-  date: Date;
-  time?: string;
-  notifyDeity: boolean;
-  notifyFollower: boolean;
-  createdBy: "deity" | "follower";
+  event_type: "free" | "busy" | "event" | "ritual" | "note";
+  event_date: string; // ISO date string
+  event_time: string | null;
+  created_by: string;
+  user_id: string;
 }
 
 const eventTypes = [
@@ -34,19 +36,17 @@ function getFirstDayOfMonth(year: number, month: number) {
 }
 
 export default function AlmanaquePage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState("");
-  const [newEventType, setNewEventType] = useState<CalendarEvent["type"]>("event");
+  const [newEventType, setNewEventType] = useState<CalendarEvent["event_type"]>("event");
   const [newEventTime, setNewEventTime] = useState("");
-  const [notifyDeity, setNotifyDeity] = useState(false);
-  const [notifyFollower, setNotifyFollower] = useState(false);
-
-  const [events, setEvents] = useState<CalendarEvent[]>([
-    { id: "1", title: "Ritual de iniciación", type: "ritual", date: new Date(2026, 6, 15), time: "22:00", notifyDeity: true, notifyFollower: true, createdBy: "deity" },
-    { id: "2", title: "Tiempo libre", type: "free", date: new Date(2026, 6, 20), notifyDeity: false, notifyFollower: true, createdBy: "follower" },
-  ]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -54,41 +54,112 @@ export default function AlmanaquePage() {
   const firstDay = getFirstDayOfMonth(year, month);
   const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
+  useEffect(() => {
+    loadEvents();
+  }, [user, currentDate]);
+
+  const loadEvents = async () => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Cargar eventos del mes actual
+    const startDate = new Date(year, month, 1).toISOString().split('T')[0];
+    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from("calendar_events")
+      .select("*")
+      .eq("user_id", user.id)
+      .gte("event_date", startDate)
+      .lte("event_date", endDate);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudieron cargar los eventos: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      setEvents(data || []);
+    }
+    setIsLoading(false);
+  };
+
   const goToPrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const goToNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
   const getEventsForDate = (day: number) => {
-    return events.filter(e =>
-      e.date.getDate() === day &&
-      e.date.getMonth() === month &&
-      e.date.getFullYear() === year
-    );
+    const targetDate = new Date(year, month, day).toISOString().split('T')[0];
+    return events.filter(e => e.event_date === targetDate);
   };
 
-  const addEvent = (e: React.FormEvent) => {
+  const addEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !newEventTitle) return;
+    if (!selectedDate || !newEventTitle || !user) return;
 
-    const newEvent: CalendarEvent = {
-      id: Date.now().toString(),
+    setIsSaving(true);
+    // Formatear fecha correctamente: YYYY-MM-DD en la zona horaria local
+    const eventDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+      .toISOString()
+      .split('T')[0];
+
+    const { error } = await supabase.from("calendar_events").insert({
       title: newEventTitle,
-      type: newEventType,
-      date: selectedDate,
-      time: newEventTime || undefined,
-      notifyDeity,
-      notifyFollower,
-      createdBy: "deity", // En producción vendría del auth
-    };
+      event_type: newEventType,
+      event_date: eventDate,
+      event_time: newEventTime || null,
+      user_id: user.id,
+      created_by: user.id,
+    });
 
-    setEvents([...events, newEvent]);
-    setNewEventTitle("");
-    setNewEventTime("");
-    setShowEventForm(false);
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo crear el evento: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Evento creado",
+        description: `${newEventTitle} ha sido inscrito en el almanaque.`,
+      });
+      setNewEventTitle("");
+      setNewEventTime("");
+      setShowEventForm(false);
+      loadEvents();
+    }
+    setIsSaving(false);
   };
 
-  const deleteEvent = (id: string) => {
-    setEvents(events.filter(e => e.id !== id));
+  const deleteEvent = async (id: string) => {
+    const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo eliminar: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Evento eliminado",
+        description: "El evento ha sido borrado del almanaque.",
+      });
+      loadEvents();
+    }
   };
+
+  if (isLoading) {
+    return (
+      <AppLayout title="Almanaque" icon={<Calendar className="w-5 h-5" />}>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-gold animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout title="Almanaque" icon={<Calendar className="w-5 h-5" />}>
@@ -163,10 +234,10 @@ export default function AlmanaquePage() {
                           <div
                             key={idx}
                             className={`w-1.5 h-1.5 rounded-full ${
-                              e.type === "ritual" ? "bg-purple-400" :
-                              e.type === "event" ? "bg-gold" :
-                              e.type === "free" ? "bg-green-400" :
-                              e.type === "busy" ? "bg-wine" : "bg-blue-400"
+                              e.event_type === "ritual" ? "bg-purple-400" :
+                              e.event_type === "event" ? "bg-gold" :
+                              e.event_type === "free" ? "bg-green-400" :
+                              e.event_type === "busy" ? "bg-wine" : "bg-blue-400"
                             }`}
                           />
                         ))}
@@ -195,7 +266,7 @@ export default function AlmanaquePage() {
                     </p>
                   ) : (
                     getEventsForDate(selectedDate.getDate()).map(event => {
-                      const typeInfo = eventTypes.find(t => t.key === event.type);
+                      const typeInfo = eventTypes.find(t => t.key === event.event_type);
                       return (
                         <div
                           key={event.id}
@@ -206,17 +277,9 @@ export default function AlmanaquePage() {
                               <span className={typeInfo?.color}>{typeInfo?.icon}</span>
                               <span className="font-heading text-sm text-foreground">{event.title}</span>
                             </div>
-                            {event.time && (
-                              <span className="font-body text-xs text-muted-foreground">{event.time}</span>
+                            {event.event_time && (
+                              <span className="font-body text-xs text-muted-foreground">{event.event_time}</span>
                             )}
-                            <div className="flex gap-2 text-xs">
-                              {event.notifyDeity && (
-                                <span className="text-gold/60">Notifica a deidad</span>
-                              )}
-                              {event.notifyFollower && (
-                                <span className="text-wine/60">Notifica a fiel</span>
-                              )}
-                            </div>
                           </div>
                           <button
                             onClick={() => deleteEvent(event.id)}
@@ -277,29 +340,21 @@ export default function AlmanaquePage() {
                         className="bg-background/50 border border-border rounded-sm px-3 py-2
                                    text-foreground font-body text-sm focus:outline-none focus:border-gold/50"
                       />
-                      <div className="flex gap-4 text-sm font-body">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={notifyDeity}
-                            onChange={(e) => setNotifyDeity(e.target.checked)}
-                            className="accent-gold"
-                          />
-                          <span className="text-muted-foreground">Notificar deidad</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={notifyFollower}
-                            onChange={(e) => setNotifyFollower(e.target.checked)}
-                            className="accent-wine"
-                          />
-                          <span className="text-muted-foreground">Notificar fiel</span>
-                        </label>
-                      </div>
                       <div className="flex gap-2">
-                        <RitualButton type="submit" variant="gold" className="flex-1">
-                          Guardar
+                        <RitualButton 
+                          type="submit" 
+                          variant="gold" 
+                          className="flex-1"
+                          disabled={isSaving}
+                        >
+                          {isSaving ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Guardando...
+                            </>
+                          ) : (
+                            "Guardar"
+                          )}
                         </RitualButton>
                         <button
                           type="button"
