@@ -612,7 +612,7 @@ export default function SesionPage() {
       const centerY = height / 2;
       const timeWindow = 10000; // 10 segundos visibles
 
-      const draw = (_timestamp: number) => {
+      const draw = () => {
         const now = Date.now();
         const elapsed = now - recordingStartTime;
 
