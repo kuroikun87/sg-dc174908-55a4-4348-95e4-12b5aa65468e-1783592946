@@ -211,6 +211,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       if (eventsError) console.error("Error cargando eventos:", eventsError);
       setEvents(eventsData || []);
 
+      // Forzar actualización del calendario
+      setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth()));
+
       const { data: fetishesData } = await supabase
         .from("fetish_ratings")
         .select("*, fetishes(*)")
@@ -469,6 +472,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       setShowEventForm(false);
       setEditingEvent(null);
       setEventForm({ title: "", date: "", time: "" });
+      
+      // Pequeño delay para asegurar que la base de datos haya propagado el cambio
+      await new Promise(resolve => setTimeout(resolve, 100));
       await loadMemberData();
     } catch (error) {
       console.error("Error saving event:", error);
