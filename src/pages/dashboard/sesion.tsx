@@ -228,15 +228,17 @@ export default function SesionPage() {
     }
 
     try {
-      // Cargar patrones
-      const { data: patternsData } = await supabase
-        .from("beat_patterns")
-        .select("*")
-        .eq("cult_id", profile.cult_id)
-        .order("created_at", { ascending: false });
-      setPatterns(patternsData || []);
+      // Cargar patrones (solo para deidades)
+      if (isDeity) {
+        const { data: patternsData } = await supabase
+          .from("beat_patterns")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .order("created_at", { ascending: false });
+        setPatterns(patternsData || []);
+      }
 
-      // Cargar tarjetas
+      // Cargar tarjetas (todos las necesitan para mostrar cuando llegan por Realtime)
       const { data: cardsData } = await supabase
         .from("session_cards")
         .select("*")
@@ -244,13 +246,15 @@ export default function SesionPage() {
         .order("created_at", { ascending: false });
       setCards(cardsData || []);
 
-      // Cargar audios
-      const { data: audiosData } = await supabase
-        .from("session_audios")
-        .select("*")
-        .eq("cult_id", profile.cult_id)
-        .order("created_at", { ascending: false });
-      setAudios(audiosData || []);
+      // Cargar audios (solo para deidades)
+      if (isDeity) {
+        const { data: audiosData } = await supabase
+          .from("session_audios")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .order("created_at", { ascending: false });
+        setAudios(audiosData || []);
+      }
 
       // Cargar fieles disponibles (solo para deidades)
       if (isDeity) {
@@ -291,6 +295,23 @@ export default function SesionPage() {
         setIsPlaying(sessionData.is_playing);
         if (isDeity) {
           setIsMuted(sessionData.is_muted_for_deity);
+        }
+        
+        // Si hay tarjeta activa, cargarla
+        if (sessionData.current_card_id && cardsData) {
+          const card = cardsData.find(c => c.id === sessionData.current_card_id);
+          if (card) {
+            setActiveCard(card);
+            setCardDuration(sessionData.card_duration_seconds);
+            setShowTimer(sessionData.card_show_timer);
+            
+            // Calcular tiempo restante
+            if (sessionData.card_duration_seconds && sessionData.card_started_at) {
+              const elapsed = Math.floor((Date.now() - new Date(sessionData.card_started_at).getTime()) / 1000);
+              const remaining = sessionData.card_duration_seconds - elapsed;
+              setCardTimeLeft(remaining > 0 ? remaining : 0);
+            }
+          }
         }
       }
     } catch (error) {
@@ -768,125 +789,140 @@ export default function SesionPage() {
 
           {/* Controles de Beat */}
           {activeSession && (
-            <ParchmentCard title="Control de Ritmo" icon={<Circle className="w-4 h-4" />}>
-              <div className="space-y-6">
-                {/* Visualización del beat */}
-                <div className="flex items-center justify-center py-8">
-                  <motion.div
-                    animate={{ scale: beatScale }}
-                    transition={{ type: "spring", stiffness: 300, damping: 10 }}
-                    className="w-32 h-32 rounded-full bg-gradient-to-br from-wine/40 to-gold/40 
-                             border-4 border-gold/60 shadow-lg shadow-gold/20"
-                  />
-                </div>
+            <div className="space-y-4">
+              {/* Layout adaptativo: tarjeta arriba + beat abajo */}
+              <div className="relative min-h-[400px]">
+                {/* Tarjeta activa - desliza desde arriba */}
+                <AnimatePresence>
+                  {activeCard && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -100 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -100 }}
+                      transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                      className="mb-4"
+                    >
+                      <ParchmentCard title="Tarjeta Activa" icon={<Zap className="w-4 h-4" />}>
+                        <div className="space-y-3">
+                          <div className="p-4 bg-gold/10 rounded-sm border border-gold/30">
+                            <h3 className="font-display text-lg text-foreground mb-2">
+                              {activeCard.title}
+                            </h3>
+                            {activeCard.description && (
+                              <p className="font-body text-sm text-muted-foreground">
+                                {activeCard.description}
+                              </p>
+                            )}
+                          </div>
+                          {cardTimeLeft !== null && showTimer && (
+                            <div className="text-center">
+                              <span className="font-mono text-2xl text-gold">
+                                {Math.floor(cardTimeLeft / 60)}:{(cardTimeLeft % 60).toString().padStart(2, "0")}
+                              </span>
+                            </div>
+                          )}
+                          {isDeity && (
+                            <RitualButton variant="outline" onClick={removeCard} className="w-full">
+                              <X className="w-4 h-4 mr-2" />
+                              Retirar Tarjeta
+                            </RitualButton>
+                          )}
+                        </div>
+                      </ParchmentCard>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                {/* Controles */}
-                {isDeity && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="font-heading text-xs text-muted-foreground uppercase">
-                        RPM: {rpm}
-                      </label>
-                      <Slider
-                        value={[rpm]}
-                        onValueChange={handleRpmChange}
-                        min={30}
-                        max={180}
-                        step={5}
-                        className="w-full"
-                      />
-                    </div>
+                {/* Beat - desliza hacia abajo cuando aparece tarjeta */}
+                <motion.div
+                  animate={{
+                    y: activeCard ? 0 : -80,
+                  }}
+                  transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                >
+                  <ParchmentCard title="Control de Ritmo" icon={<Circle className="w-4 h-4" />}>
+                    <div className="space-y-6">
+                      {/* Visualización del beat */}
+                      <div className="flex items-center justify-center py-8">
+                        <motion.div
+                          animate={{ scale: beatScale }}
+                          transition={{ type: "spring", stiffness: 300, damping: 10 }}
+                          className="w-32 h-32 rounded-full bg-gradient-to-br from-wine/40 to-gold/40 
+                                   border-4 border-gold/60 shadow-lg shadow-gold/20"
+                        />
+                      </div>
 
-                    <div className="flex gap-2">
-                      <RitualButton
-                        variant={isPlaying ? "outline" : "gold"}
-                        onClick={togglePlay}
-                        className="flex-1"
-                      >
-                        {isPlaying ? (
-                          <>
-                            <Pause className="w-4 h-4 mr-2" />
-                            Pausar
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4 mr-2" />
-                            Reproducir
-                          </>
-                        )}
-                      </RitualButton>
+                      {/* Controles */}
+                      {isDeity && (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="font-heading text-xs text-muted-foreground uppercase">
+                              RPM: {rpm}
+                            </label>
+                            <Slider
+                              value={[rpm]}
+                              onValueChange={handleRpmChange}
+                              min={30}
+                              max={180}
+                              step={5}
+                              className="w-full"
+                            />
+                          </div>
 
-                      <RitualButton variant="outline" onClick={toggleMute}>
-                        {isMuted ? (
-                          <VolumeX className="w-4 h-4" />
-                        ) : (
-                          <Volume2 className="w-4 h-4" />
-                        )}
-                      </RitualButton>
+                          <div className="flex gap-2">
+                            <RitualButton
+                              variant={isPlaying ? "outline" : "gold"}
+                              onClick={togglePlay}
+                              className="flex-1"
+                            >
+                              {isPlaying ? (
+                                <>
+                                  <Pause className="w-4 h-4 mr-2" />
+                                  Pausar
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="w-4 h-4 mr-2" />
+                                  Reproducir
+                                </>
+                              )}
+                            </RitualButton>
 
-                      <RitualButton variant="outline" onClick={manualBeat}>
-                        <Circle className="w-4 h-4" />
-                      </RitualButton>
-                    </div>
+                            <RitualButton variant="outline" onClick={toggleMute}>
+                              {isMuted ? (
+                                <VolumeX className="w-4 h-4" />
+                              ) : (
+                                <Volume2 className="w-4 h-4" />
+                              )}
+                            </RitualButton>
 
-                    {/* Botón para finalizar sesión */}
-                    <RitualButton variant="outline" onClick={endSession} className="w-full">
-                      <StopCircle className="w-4 h-4 mr-2" />
-                      Finalizar Sesión
-                    </RitualButton>
-                  </div>
-                )}
+                            <RitualButton variant="outline" onClick={manualBeat}>
+                              <Circle className="w-4 h-4" />
+                            </RitualButton>
+                          </div>
 
-                {/* Solo beat visual para fieles */}
-                {!isDeity && (
-                  <div className="text-center">
-                    <p className="font-body text-sm text-muted-foreground">
-                      {isPlaying ? `Ritmo: ${rpm} RPM` : "En pausa"}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </ParchmentCard>
-          )}
+                          {/* Botón para finalizar sesión */}
+                          <RitualButton variant="outline" onClick={endSession} className="w-full">
+                            <StopCircle className="w-4 h-4 mr-2" />
+                            Finalizar Sesión
+                          </RitualButton>
+                        </div>
+                      )}
 
-          {/* Tarjeta activa */}
-          <AnimatePresence>
-            {activeCard && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <ParchmentCard title="Tarjeta Activa" icon={<Zap className="w-4 h-4" />}>
-                  <div className="space-y-3">
-                    <div className="p-4 bg-gold/10 rounded-sm border border-gold/30">
-                      <h3 className="font-display text-lg text-foreground mb-2">
-                        {activeCard.title}
-                      </h3>
-                      {activeCard.description && (
-                        <p className="font-body text-sm text-muted-foreground">
-                          {activeCard.description}
-                        </p>
+                      {/* Solo beat visual para fieles */}
+                      {!isDeity && (
+                        <div className="text-center">
+                          <p className="font-body text-sm text-muted-foreground">
+                            {isPlaying ? `Ritmo: ${rpm} RPM` : "En pausa"}
+                          </p>
+                        </div>
                       )}
                     </div>
-                    {cardTimeLeft !== null && showTimer && (
-                      <div className="text-center">
-                        <span className="font-mono text-2xl text-gold">
-                          {Math.floor(cardTimeLeft / 60)}:{(cardTimeLeft % 60).toString().padStart(2, "0")}
-                        </span>
-                      </div>
-                    )}
-                    {isDeity && (
-                      <RitualButton variant="outline" onClick={removeCard} className="w-full">
-                        <X className="w-4 h-4 mr-2" />
-                        Retirar Tarjeta
-                      </RitualButton>
-                    )}
-                  </div>
-                </ParchmentCard>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  </ParchmentCard>
+                </motion.div>
+              </div>
+            </div>
+          )}
 
           {/* Tabs para deidades */}
           {isDeity && activeSession && (
