@@ -263,12 +263,26 @@ export default function SesionPage() {
       }
 
       // Verificar sesión activa
-      const { data: sessionData } = await supabase
-        .from("active_sessions")
-        .select("*")
-        .eq(isDeity ? "deity_id" : "id", user.id)
-        .eq("is_active", true)
-        .maybeSingle();
+      let sessionData = null;
+      
+      if (isDeity) {
+        const { data } = await supabase
+          .from("active_sessions")
+          .select("*")
+          .eq("deity_id", user.id)
+          .eq("is_active", true)
+          .maybeSingle();
+        sessionData = data;
+      } else {
+        // Para fieles: buscar sesiones donde user.id esté en follower_ids
+        const { data } = await supabase
+          .from("active_sessions")
+          .select("*")
+          .contains("follower_ids", [user.id])
+          .eq("is_active", true)
+          .maybeSingle();
+        sessionData = data;
+      }
 
       if (sessionData) {
         setActiveSession(sessionData);
