@@ -148,7 +148,7 @@ export default function MisPremiosPage() {
 
       toast({
         title: "Premio comprado",
-        description: `Has adquirido "${reward.title}"`,
+        description: `Has adquirido "${reward.name}"`,
       });
 
       loadData();
