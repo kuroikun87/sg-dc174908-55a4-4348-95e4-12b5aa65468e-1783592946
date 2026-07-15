@@ -176,6 +176,93 @@ export default function SesionPage() {
     activeCardRef.current = activeCard;
   }, [activeCard]);
 
+  // Polling para fieles - actualización cada 500ms
+  useEffect(() => {
+    if (isDeity || !activeSession || !user) return;
+
+    console.log("[Polling] Starting polling for follower session updates");
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: sessionData, error } = await supabase
+          .from("active_sessions")
+          .select("*")
+          .eq("id", activeSession.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("[Polling] Error fetching session:", error);
+          return;
+        }
+
+        if (!sessionData) {
+          console.log("[Polling] Session ended");
+          setActiveSession(null);
+          setIsPlaying(false);
+          setActiveCard(null);
+          return;
+        }
+
+        // Actualizar RPM
+        if (sessionData.current_rpm !== rpmRef.current) {
+          console.log(`[Polling] RPM changed: ${rpmRef.current} → ${sessionData.current_rpm}`);
+          setRpm(sessionData.current_rpm);
+        }
+
+        // Actualizar play/pause
+        if (sessionData.is_playing !== isPlayingRef.current) {
+          console.log(`[Polling] Playing changed: ${isPlayingRef.current} → ${sessionData.is_playing}`);
+          setIsPlaying(sessionData.is_playing);
+        }
+
+        // Reproducir beat manual
+        if (sessionData.manual_beat_trigger) {
+          const oldTrigger = activeSessionRef.current?.manual_beat_trigger;
+          if (oldTrigger !== sessionData.manual_beat_trigger) {
+            console.log(`[Polling] Manual beat triggered: ${oldTrigger} → ${sessionData.manual_beat_trigger}`);
+            playBeat();
+            animateBeatCircle();
+          }
+        }
+
+        // Actualizar tarjeta activa
+        if (sessionData.current_card_id && sessionData.current_card_id !== activeCardRef.current?.id) {
+          console.log(`[Polling] Card changed: ${activeCardRef.current?.id} → ${sessionData.current_card_id}`);
+          const card = cardsRef.current.find(c => c.id === sessionData.current_card_id);
+          if (card) {
+            setActiveCard(card);
+            setCardDuration(sessionData.card_duration_seconds);
+            setShowTimer(sessionData.card_show_timer);
+
+            // Calcular tiempo restante
+            if (sessionData.card_duration_seconds && sessionData.card_started_at) {
+              const elapsed = Math.floor((Date.now() - new Date(sessionData.card_started_at).getTime()) / 1000);
+              const remaining = sessionData.card_duration_seconds - elapsed;
+              setCardTimeLeft(remaining > 0 ? remaining : 0);
+            } else {
+              setCardTimeLeft(sessionData.card_duration_seconds);
+            }
+          }
+        } else if (!sessionData.current_card_id && activeCardRef.current) {
+          console.log("[Polling] Card removed");
+          setActiveCard(null);
+          setCardDuration(null);
+          setCardTimeLeft(null);
+        }
+
+        // Actualizar referencia local
+        setActiveSession(sessionData);
+      } catch (error) {
+        console.error("[Polling] Unexpected error:", error);
+      }
+    }, 500); // Polling cada 500ms
+
+    return () => {
+      console.log("[Polling] Stopping polling");
+      clearInterval(pollInterval);
+    };
+  }, [activeSession?.id, isDeity, user]);
+
   // Beat automático
   useEffect(() => {
     if (!isPlaying) return;
