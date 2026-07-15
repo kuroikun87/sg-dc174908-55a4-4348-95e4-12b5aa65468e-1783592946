@@ -176,7 +176,61 @@ export default function SesionPage() {
     activeCardRef.current = activeCard;
   }, [activeCard]);
 
-  // Polling para fieles - actualización cada 500ms
+  // Polling para fieles sin sesión activa - buscar sesiones nuevas cada 250ms
+  useEffect(() => {
+    if (isDeity || activeSession || !user) return;
+
+    console.log("[Polling] Starting polling for new sessions (follower waiting)");
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: sessionData, error } = await supabase
+          .from("active_sessions")
+          .select("*")
+          .contains("follower_ids", [user.id])
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (error) {
+          console.error("[Polling] Error checking for new session:", error);
+          return;
+        }
+
+        if (sessionData) {
+          console.log("[Polling] New session detected!");
+          setActiveSession(sessionData);
+          setSelectedFollowers(sessionData.follower_ids || []);
+          setRpm(sessionData.current_rpm);
+          setIsPlaying(sessionData.is_playing);
+          
+          // Cargar tarjeta activa si existe
+          if (sessionData.current_card_id) {
+            const card = cardsRef.current.find(c => c.id === sessionData.current_card_id);
+            if (card) {
+              setActiveCard(card);
+              setCardDuration(sessionData.card_duration_seconds);
+              setShowTimer(sessionData.card_show_timer);
+              
+              if (sessionData.card_duration_seconds && sessionData.card_started_at) {
+                const elapsed = Math.floor((Date.now() - new Date(sessionData.card_started_at).getTime()) / 1000);
+                const remaining = sessionData.card_duration_seconds - elapsed;
+                setCardTimeLeft(remaining > 0 ? remaining : 0);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[Polling] Unexpected error checking for new session:", error);
+      }
+    }, 250); // Polling cada 250ms
+
+    return () => {
+      console.log("[Polling] Stopping polling for new sessions");
+      clearInterval(pollInterval);
+    };
+  }, [activeSession, isDeity, user]);
+
+  // Polling para fieles con sesión activa - actualización cada 250ms
   useEffect(() => {
     if (isDeity || !activeSession || !user) return;
 
@@ -195,11 +249,13 @@ export default function SesionPage() {
           return;
         }
 
-        if (!sessionData) {
+        if (!sessionData || !sessionData.is_active) {
           console.log("[Polling] Session ended");
           setActiveSession(null);
           setIsPlaying(false);
           setActiveCard(null);
+          setCardDuration(null);
+          setCardTimeLeft(null);
           return;
         }
 
@@ -255,7 +311,7 @@ export default function SesionPage() {
       } catch (error) {
         console.error("[Polling] Unexpected error:", error);
       }
-    }, 500); // Polling cada 500ms
+    }, 250); // Polling cada 250ms
 
     return () => {
       console.log("[Polling] Stopping polling");
