@@ -32,22 +32,22 @@ interface Task {
   id: string;
   title: string;
   description: string | null;
-  faith_points: number;
+  faith_points_reward: number;
   requires_evidence: boolean;
 }
 
 interface Reward {
   id: string;
-  title: string;
+  name: string;
   description: string | null;
-  faith_points: number;
+  faith_points_cost: number;
 }
 
 interface Consequence {
   id: string;
-  title: string;
+  name: string;
   description: string | null;
-  faith_points: number;
+  faith_points_cost: number;
 }
 
 export default function RecompensasPage() {
@@ -99,7 +99,7 @@ export default function RecompensasPage() {
       const [tasksRes, rewardsRes, consequencesRes] = await Promise.all([
         supabase.from("tasks").select("*").eq("cult_id", profile.cult_id).order("created_at", { ascending: false }),
         supabase.from("rewards").select("*").eq("cult_id", profile.cult_id).order("created_at", { ascending: false }),
-        supabase.from("consequences").select("*").eq("cult_id", profile.cult_id).order("created_at", { ascending: false }),
+        supabase.from("punishments").select("*").eq("cult_id", profile.cult_id).order("created_at", { ascending: false }),
       ]);
 
       if (tasksRes.error) throw tasksRes.error;
@@ -128,7 +128,7 @@ export default function RecompensasPage() {
       setTaskForm({
         title: task.title,
         description: task.description || "",
-        faith_points: task.faith_points,
+        faith_points: task.faith_points_reward,
         requires_evidence: task.requires_evidence,
       });
     } else {
@@ -148,7 +148,7 @@ export default function RecompensasPage() {
           .update({
             title: taskForm.title,
             description: taskForm.description || null,
-            faith_points: taskForm.faith_points,
+            faith_points_reward: taskForm.faith_points,
             requires_evidence: taskForm.requires_evidence,
           })
           .eq("id", editingTask.id);
@@ -160,7 +160,7 @@ export default function RecompensasPage() {
           cult_id: profile.cult_id,
           title: taskForm.title,
           description: taskForm.description || null,
-          faith_points: taskForm.faith_points,
+          faith_points_reward: taskForm.faith_points,
           requires_evidence: taskForm.requires_evidence,
         });
 
@@ -201,9 +201,9 @@ export default function RecompensasPage() {
     if (reward) {
       setEditingReward(reward);
       setRewardForm({
-        title: reward.title,
+        title: reward.name,
         description: reward.description || "",
-        faith_points: reward.faith_points,
+        faith_points: reward.faith_points_cost,
       });
     } else {
       setEditingReward(null);
@@ -220,9 +220,9 @@ export default function RecompensasPage() {
         const { error } = await supabase
           .from("rewards")
           .update({
-            title: rewardForm.title,
+            name: rewardForm.title,
             description: rewardForm.description || null,
-            faith_points: rewardForm.faith_points,
+            faith_points_cost: rewardForm.faith_points,
           })
           .eq("id", editingReward.id);
 
@@ -231,9 +231,9 @@ export default function RecompensasPage() {
       } else {
         const { error } = await supabase.from("rewards").insert({
           cult_id: profile.cult_id,
-          title: rewardForm.title,
+          name: rewardForm.title,
           description: rewardForm.description || null,
-          faith_points: rewardForm.faith_points,
+          faith_points_cost: rewardForm.faith_points,
         });
 
         if (error) throw error;
@@ -273,9 +273,9 @@ export default function RecompensasPage() {
     if (consequence) {
       setEditingConsequence(consequence);
       setConsequenceForm({
-        title: consequence.title,
+        title: consequence.name,
         description: consequence.description || "",
-        faith_points: consequence.faith_points,
+        faith_points: consequence.faith_points_cost,
       });
     } else {
       setEditingConsequence(null);
@@ -290,22 +290,22 @@ export default function RecompensasPage() {
     try {
       if (editingConsequence) {
         const { error } = await supabase
-          .from("consequences")
+          .from("punishments")
           .update({
-            title: consequenceForm.title,
+            name: consequenceForm.title,
             description: consequenceForm.description || null,
-            faith_points: consequenceForm.faith_points,
+            faith_points_cost: consequenceForm.faith_points,
           })
           .eq("id", editingConsequence.id);
 
         if (error) throw error;
         toast({ title: "Consecuencia actualizada" });
       } else {
-        const { error } = await supabase.from("consequences").insert({
+        const { error } = await supabase.from("punishments").insert({
           cult_id: profile.cult_id,
-          title: consequenceForm.title,
+          name: consequenceForm.title,
           description: consequenceForm.description || null,
-          faith_points: consequenceForm.faith_points,
+          faith_points_cost: consequenceForm.faith_points,
         });
 
         if (error) throw error;
@@ -326,7 +326,7 @@ export default function RecompensasPage() {
 
   const deleteConsequence = async (id: string) => {
     try {
-      const { error } = await supabase.from("consequences").delete().eq("id", id);
+      const { error } = await supabase.from("punishments").delete().eq("id", id);
       if (error) throw error;
       toast({ title: "Consecuencia eliminada" });
       loadAllData();
@@ -399,9 +399,9 @@ export default function RecompensasPage() {
                             <p className="font-body text-sm text-muted-foreground">{task.description}</p>
                           )}
                           <div className="flex gap-2 mt-2">
-                            {task.faith_points > 0 && (
+                            {task.faith_points_reward > 0 && (
                               <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
-                                +{task.faith_points} PF
+                                +{task.faith_points_reward} PF
                               </Badge>
                             )}
                             {task.requires_evidence && (
@@ -447,13 +447,13 @@ export default function RecompensasPage() {
                     <ParchmentCard key={reward.id}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
-                          <h3 className="font-heading text-base text-foreground mb-1">{reward.title}</h3>
+                          <h3 className="font-heading text-base text-foreground mb-1">{reward.name}</h3>
                           {reward.description && (
                             <p className="font-body text-sm text-muted-foreground">{reward.description}</p>
                           )}
-                          {reward.faith_points > 0 && (
+                          {reward.faith_points_cost > 0 && (
                             <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30 mt-2">
-                              {reward.faith_points} PF
+                              {reward.faith_points_cost} PF
                             </Badge>
                           )}
                         </div>
@@ -495,13 +495,13 @@ export default function RecompensasPage() {
                     <ParchmentCard key={consequence.id}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
-                          <h3 className="font-heading text-base text-foreground mb-1">{consequence.title}</h3>
+                          <h3 className="font-heading text-base text-foreground mb-1">{consequence.name}</h3>
                           {consequence.description && (
                             <p className="font-body text-sm text-muted-foreground">{consequence.description}</p>
                           )}
-                          {consequence.faith_points > 0 && (
+                          {consequence.faith_points_cost > 0 && (
                             <Badge variant="outline" className="bg-wine/20 text-wine border-wine/40 mt-2">
-                              {consequence.faith_points} PF para quitar
+                              {consequence.faith_points_cost} PF para quitar
                             </Badge>
                           )}
                         </div>
