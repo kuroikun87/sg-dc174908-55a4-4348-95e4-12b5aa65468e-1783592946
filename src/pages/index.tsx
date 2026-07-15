@@ -213,7 +213,7 @@ export default function Home() {
                       className="w-full"
                       onClick={() => router.push("/dashboard")}
                     >
-                      Ir al Dashboard
+                      Ir al Culto
                     </RitualButton>
                     
                     <button
