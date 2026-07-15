@@ -24,20 +24,19 @@ interface Consequence {
   faith_points_cost: number;
   tags: string[];
   is_active: boolean;
-  created_by: string;
   created_at: string;
 }
 
 interface AssignedConsequence {
   id: string;
-  consequence_id: string;
+  punishment_id: string;
   follower_id: string;
   assigned_by: string;
   assigned_at: string;
   notes: string | null;
   is_removed: boolean;
   removed_at: string | null;
-  consequences: Consequence;
+  punishments: Consequence;
 }
 
 export default function ConsecuenciasPage() {
@@ -78,7 +77,7 @@ export default function ConsecuenciasPage() {
     if (!profile?.cult_id) return;
 
     const { data, error } = await supabase
-      .from("consequences")
+      .from("punishments")
       .select("*")
       .eq("cult_id", profile.cult_id)
       .eq("is_active", true)
@@ -99,8 +98,8 @@ export default function ConsecuenciasPage() {
     if (!user) return;
 
     const { data, error } = await supabase
-      .from("assigned_consequences")
-      .select("*, consequences(*)")
+      .from("assigned_punishments")
+      .select("*, punishments(*)")
       .eq("follower_id", user.id)
       .eq("is_removed", false)
       .order("assigned_at", { ascending: false });
@@ -127,9 +126,8 @@ export default function ConsecuenciasPage() {
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
-    const { error } = await supabase.from("consequences").insert({
+    const { error } = await supabase.from("punishments").insert({
       cult_id: profile.cult_id,
-      created_by: user.id,
       name: newName,
       description: newDescription || null,
       faith_points_cost: newCost,
@@ -161,10 +159,10 @@ export default function ConsecuenciasPage() {
   const removeConsequence = async (ac: AssignedConsequence) => {
     if (!user || !profile) return;
 
-    if ((profile.faith_points || 0) < ac.consequences.faith_points_cost) {
+    if ((profile.faith_points || 0) < ac.punishments.faith_points_cost) {
       toast({
         title: "Puntos insuficientes",
-        description: `Necesitas ${ac.consequences.faith_points_cost} PF para eliminar esta consecuencia.`,
+        description: `Necesitas ${ac.punishments.faith_points_cost} PF para eliminar esta consecuencia.`,
         variant: "destructive",
       });
       return;
@@ -173,12 +171,8 @@ export default function ConsecuenciasPage() {
     setIsSaving(true);
 
     try {
-      // Llamar función RPC que:
-      // 1. Resta los PF del usuario
-      // 2. Registra el log
-      // 3. Marca la consecuencia como eliminada
-      const { data, error } = await supabase.rpc("remove_consequence", {
-        p_assigned_consequence_id: ac.id,
+      const { data, error } = await supabase.rpc("remove_punishment", {
+        p_assigned_punishment_id: ac.id,
         p_follower_id: user.id,
       });
 
@@ -186,11 +180,10 @@ export default function ConsecuenciasPage() {
 
       toast({
         title: "Consecuencia eliminada",
-        description: `Has eliminado: ${ac.consequences.name}`,
+        description: `Has eliminado: ${ac.punishments.name}`,
       });
 
       loadMyConsequences();
-      // Recargar perfil para actualizar PF
       window.location.reload();
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";
@@ -205,7 +198,7 @@ export default function ConsecuenciasPage() {
   };
 
   const deleteConsequence = async (id: string) => {
-    const { error } = await supabase.from("consequences").delete().eq("id", id);
+    const { error } = await supabase.from("punishments").delete().eq("id", id);
 
     if (error) {
       toast({
@@ -414,7 +407,7 @@ export default function ConsecuenciasPage() {
                 </p>
               ) : (
                 myConsequences.map((ac, i) => {
-                  const canAfford = (profile?.faith_points || 0) >= ac.consequences.faith_points_cost;
+                  const canAfford = (profile?.faith_points || 0) >= ac.punishments.faith_points_cost;
 
                   return (
                     <motion.div
@@ -428,17 +421,17 @@ export default function ConsecuenciasPage() {
                         <div className="flex items-center gap-2">
                           <AlertTriangle className="w-4 h-4 text-wine" />
                           <h3 className="font-heading text-base text-foreground">
-                            {ac.consequences.name}
+                            {ac.punishments.name}
                           </h3>
                         </div>
-                        {ac.consequences.description && (
+                        {ac.punishments.description && (
                           <p className="font-body text-sm text-muted-foreground">
-                            {ac.consequences.description}
+                            {ac.punishments.description}
                           </p>
                         )}
                         <div className="flex items-center gap-3">
                           <span className="px-2 py-1 bg-wine/20 text-wine font-heading rounded-sm text-xs">
-                            {ac.consequences.faith_points_cost} PF
+                            {ac.punishments.faith_points_cost} PF
                           </span>
                           {!canAfford && (
                             <span className="text-xs text-muted-foreground">

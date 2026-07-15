@@ -15,6 +15,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      assigned_punishments: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string
+          follower_id: string
+          id: string
+          is_removed: boolean | null
+          notes: string | null
+          punishment_id: string
+          removed_at: string | null
+          removed_by: string | null
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by: string
+          follower_id: string
+          id?: string
+          is_removed?: boolean | null
+          notes?: string | null
+          punishment_id: string
+          removed_at?: string | null
+          removed_by?: string | null
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string
+          follower_id?: string
+          id?: string
+          is_removed?: boolean | null
+          notes?: string | null
+          punishment_id?: string
+          removed_at?: string | null
+          removed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assigned_punishments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_punishments_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_punishments_punishment_id_fkey"
+            columns: ["punishment_id"]
+            isOneToOne: false
+            referencedRelation: "punishments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_punishments_removed_by_fkey"
+            columns: ["removed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assigned_tasks: {
         Row: {
           assigned_by: string
@@ -52,6 +117,61 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      awarded_rewards: {
+        Row: {
+          awarded_at: string | null
+          awarded_by: string
+          follower_id: string
+          id: string
+          is_redeemed: boolean | null
+          notes: string | null
+          redeemed_at: string | null
+          reward_id: string
+        }
+        Insert: {
+          awarded_at?: string | null
+          awarded_by: string
+          follower_id: string
+          id?: string
+          is_redeemed?: boolean | null
+          notes?: string | null
+          redeemed_at?: string | null
+          reward_id: string
+        }
+        Update: {
+          awarded_at?: string | null
+          awarded_by?: string
+          follower_id?: string
+          id?: string
+          is_redeemed?: boolean | null
+          notes?: string | null
+          redeemed_at?: string | null
+          reward_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "awarded_rewards_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "awarded_rewards_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "awarded_rewards_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "rewards"
             referencedColumns: ["id"]
           },
         ]
@@ -429,7 +549,10 @@ export type Database = {
           description: string | null
           faith_points_cost: number | null
           id: string
+          is_active: boolean | null
           name: string
+          tags: string[] | null
+          updated_at: string | null
         }
         Insert: {
           created_at?: string | null
@@ -437,7 +560,10 @@ export type Database = {
           description?: string | null
           faith_points_cost?: number | null
           id?: string
+          is_active?: boolean | null
           name: string
+          tags?: string[] | null
+          updated_at?: string | null
         }
         Update: {
           created_at?: string | null
@@ -445,7 +571,10 @@ export type Database = {
           description?: string | null
           faith_points_cost?: number | null
           id?: string
+          is_active?: boolean | null
           name?: string
+          tags?: string[] | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -494,25 +623,46 @@ export type Database = {
           created_at: string | null
           cult_id: string
           description: string | null
+          exclusive_to: string | null
           faith_points_cost: number | null
+          favor_points_required: number | null
           id: string
+          image_url: string | null
+          is_active: boolean | null
+          is_exclusive: boolean | null
           name: string
+          tags: string[] | null
+          updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           cult_id: string
           description?: string | null
+          exclusive_to?: string | null
           faith_points_cost?: number | null
+          favor_points_required?: number | null
           id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_exclusive?: boolean | null
           name: string
+          tags?: string[] | null
+          updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           cult_id?: string
           description?: string | null
+          exclusive_to?: string | null
           faith_points_cost?: number | null
+          favor_points_required?: number | null
           id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_exclusive?: boolean | null
           name?: string
+          tags?: string[] | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -520,6 +670,13 @@ export type Database = {
             columns: ["cult_id"]
             isOneToOne: false
             referencedRelation: "cults"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rewards_exclusive_to_fkey"
+            columns: ["exclusive_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -653,6 +810,14 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      purchase_reward: {
+        Args: { p_follower_id: string; p_reward_id: string }
+        Returns: Json
+      }
+      remove_punishment: {
+        Args: { p_assigned_punishment_id: string; p_follower_id: string }
+        Returns: Json
       }
     }
     Enums: {

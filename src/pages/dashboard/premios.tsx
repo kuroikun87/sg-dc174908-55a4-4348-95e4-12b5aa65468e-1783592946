@@ -25,14 +25,9 @@ interface Reward {
   id: string;
   name: string;
   description: string | null;
-  image_url: string | null;
   faith_points_cost: number;
-  favor_points_required: number;
-  is_exclusive: boolean;
-  exclusive_to: string | null;
   tags: string[];
   is_active: boolean;
-  created_by: string;
   created_at: string;
 }
 
@@ -136,7 +131,6 @@ export default function PremiosPage() {
 
     const { error } = await supabase.from("rewards").insert({
       cult_id: profile.cult_id,
-      created_by: user.id,
       name: newName,
       description: newDescription || null,
       faith_points_cost: newCost,
