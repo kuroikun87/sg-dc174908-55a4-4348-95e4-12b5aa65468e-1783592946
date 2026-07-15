@@ -664,7 +664,7 @@ export default function SesionPage() {
         animationFrameRef.current = requestAnimationFrame(draw);
       };
 
-      draw();
+      animationFrameRef.current = requestAnimationFrame(draw);
 
       return () => {
         if (animationFrameRef.current) {
