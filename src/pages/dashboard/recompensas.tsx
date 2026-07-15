@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
@@ -7,526 +6,343 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { BookPage } from "@/components/layout/BookPage";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { RitualButton } from "@/components/ui/ritual-button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Settings,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  CheckSquare,
   Gift,
   AlertTriangle,
   Plus,
+  Edit,
   Trash2,
-  Check,
-  Camera,
-  Sparkles,
-  ShoppingCart,
   Loader2,
-  Calendar,
-  X,
+  Save,
 } from "lucide-react";
 
 interface Task {
   id: string;
   title: string;
   description: string | null;
-  due_date: string | null;
-  faith_points_reward: number;
+  faith_points: number;
   requires_evidence: boolean;
-  is_completed: boolean;
-  completed_at: string | null;
-  assigned_to: string;
-  created_at: string;
 }
 
 interface Reward {
   id: string;
-  name: string;
+  title: string;
   description: string | null;
-  faith_points_cost: number;
-  tags: string[];
-  is_active: boolean;
-  created_at: string;
+  faith_points: number;
 }
 
-interface AwardedReward {
+interface Consequence {
   id: string;
-  reward_id: string;
-  follower_id: string;
-  awarded_at: string;
-  rewards: Reward;
-}
-
-interface Punishment {
-  id: string;
-  name: string;
+  title: string;
   description: string | null;
-  faith_points_cost: number;
-  tags: string[];
-  is_active: boolean;
-  created_at: string;
-}
-
-interface AssignedPunishment {
-  id: string;
-  punishment_id: string;
-  follower_id: string;
-  assigned_by: string;
-  assigned_at: string;
-  notes: string | null;
-  is_removed: boolean;
-  removed_at: string | null;
-  punishments: Punishment;
-}
-
-interface Follower {
-  id: string;
-  display_name: string | null;
-  avatar_url: string | null;
+  faith_points: number;
 }
 
 export default function RecompensasPage() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
 
-  // Tareas
+  // Templates
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [myTasks, setMyTasks] = useState<Task[]>([]);
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [newTaskDueDate, setNewTaskDueDate] = useState("");
-  const [newTaskReward, setNewTaskReward] = useState(0);
-  const [newTaskRequiresEvidence, setNewTaskRequiresEvidence] = useState(false);
-  const [selectedFollower, setSelectedFollower] = useState("");
-
-  // Premios
   const [rewards, setRewards] = useState<Reward[]>([]);
-  const [myRewards, setMyRewards] = useState<AwardedReward[]>([]);
-  const [showRewardForm, setShowRewardForm] = useState(false);
-  const [newRewardName, setNewRewardName] = useState("");
-  const [newRewardDescription, setNewRewardDescription] = useState("");
-  const [newRewardCost, setNewRewardCost] = useState(0);
-  const [newRewardTags, setNewRewardTags] = useState("");
+  const [consequences, setConsequences] = useState<Consequence[]>([]);
 
-  // Consecuencias
-  const [punishments, setPunishments] = useState<Punishment[]>([]);
-  const [myPunishments, setMyPunishments] = useState<AssignedPunishment[]>([]);
-  const [showPunishmentForm, setShowPunishmentForm] = useState(false);
-  const [newPunishmentName, setNewPunishmentName] = useState("");
-  const [newPunishmentDescription, setNewPunishmentDescription] = useState("");
-  const [newPunishmentCost, setNewPunishmentCost] = useState(0);
-  const [newPunishmentTags, setNewPunishmentTags] = useState("");
+  // Modal states
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showRewardModal, setShowRewardModal] = useState(false);
+  const [showConsequenceModal, setShowConsequenceModal] = useState(false);
 
-  // Fieles disponibles
-  const [followers, setFollowers] = useState<Follower[]>([]);
+  // Form states
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    description: "",
+    faith_points: 0,
+    requires_evidence: false,
+  });
 
-  const isDeity = profile?.role === "deity";
+  const [editingReward, setEditingReward] = useState<Reward | null>(null);
+  const [rewardForm, setRewardForm] = useState({
+    title: "",
+    description: "",
+    faith_points: 0,
+  });
+
+  const [editingConsequence, setEditingConsequence] = useState<Consequence | null>(null);
+  const [consequenceForm, setConsequenceForm] = useState({
+    title: "",
+    description: "",
+    faith_points: 0,
+  });
 
   useEffect(() => {
     loadAllData();
-  }, [profile?.cult_id, user?.id]);
+  }, [profile]);
 
   const loadAllData = async () => {
-    if (!user || !profile?.cult_id) {
-      setIsLoading(false);
-      return;
-    }
-
-    await Promise.all([
-      loadTasks(),
-      loadRewards(),
-      loadPunishments(),
-      isDeity && loadFollowers(),
-    ]);
-
-    setIsLoading(false);
-  };
-
-  const loadTasks = async () => {
-    if (!user || !profile?.cult_id) return;
-
-    if (isDeity) {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("cult_id", profile.cult_id)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error loading tasks:", error);
-      } else {
-        setTasks(data || []);
-      }
-    } else {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("assigned_to", user.id)
-        .order("is_completed", { ascending: true })
-        .order("due_date", { ascending: true });
-
-      if (error) {
-        console.error("Error loading my tasks:", error);
-      } else {
-        setMyTasks(data || []);
-      }
-    }
-  };
-
-  const loadRewards = async () => {
-    if (!user || !profile?.cult_id) return;
-
-    const { data: rewardsData, error: rewardsError } = await supabase
-      .from("rewards")
-      .select("*")
-      .eq("cult_id", profile.cult_id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-
-    if (rewardsError) {
-      console.error("Error loading rewards:", rewardsError);
-    } else {
-      setRewards(rewardsData || []);
-    }
-
-    if (!isDeity) {
-      const { data: myRewardsData, error: myRewardsError } = await supabase
-        .from("awarded_rewards")
-        .select("*, rewards(*)")
-        .eq("follower_id", user.id)
-        .order("awarded_at", { ascending: false });
-
-      if (myRewardsError) {
-        console.error("Error loading my rewards:", myRewardsError);
-      } else {
-        setMyRewards(myRewardsData || []);
-      }
-    }
-  };
-
-  const loadPunishments = async () => {
-    if (!user || !profile?.cult_id) return;
-
-    const { data: punishmentsData, error: punishmentsError } = await supabase
-      .from("punishments")
-      .select("*")
-      .eq("cult_id", profile.cult_id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-
-    if (punishmentsError) {
-      console.error("Error loading punishments:", punishmentsError);
-    } else {
-      setPunishments(punishmentsData || []);
-    }
-
-    if (!isDeity) {
-      const { data: myPunishmentsData, error: myPunishmentsError } = await supabase
-        .from("assigned_punishments")
-        .select("*, punishments(*)")
-        .eq("follower_id", user.id)
-        .eq("is_removed", false)
-        .order("assigned_at", { ascending: false });
-
-      if (myPunishmentsError) {
-        console.error("Error loading my punishments:", myPunishmentsError);
-      } else {
-        setMyPunishments(myPunishmentsData || []);
-      }
-    }
-  };
-
-  const loadFollowers = async () => {
     if (!profile?.cult_id) return;
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, display_name, avatar_url")
-      .eq("cult_id", profile.cult_id)
-      .eq("role", "follower");
+    try {
+      const [tasksRes, rewardsRes, consequencesRes] = await Promise.all([
+        supabase.from("tasks").select("*").eq("cult_id", profile.cult_id).order("created_at", { ascending: false }),
+        supabase.from("rewards").select("*").eq("cult_id", profile.cult_id).order("created_at", { ascending: false }),
+        supabase.from("consequences").select("*").eq("cult_id", profile.cult_id).order("created_at", { ascending: false }),
+      ]);
 
-    if (error) {
-      console.error("Error loading followers:", error);
-    } else {
-      setFollowers(data || []);
+      if (tasksRes.error) throw tasksRes.error;
+      if (rewardsRes.error) throw rewardsRes.error;
+      if (consequencesRes.error) throw consequencesRes.error;
+
+      setTasks(tasksRes.data || []);
+      setRewards(rewardsRes.data || []);
+      setConsequences(consequencesRes.data || []);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las plantillas",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // ============ TAREAS ============
-  const createTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim() || !user || !profile?.cult_id || !selectedFollower) return;
-
-    setIsSaving(true);
-
-    const { error } = await supabase.from("tasks").insert({
-      cult_id: profile.cult_id,
-      title: newTaskTitle,
-      description: newTaskDescription || null,
-      due_date: newTaskDueDate || null,
-      faith_points_reward: newTaskReward,
-      requires_evidence: newTaskRequiresEvidence,
-      assigned_to: selectedFollower,
-    });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: `No se pudo crear la tarea: ${error.message}`,
-        variant: "destructive",
+  // Task CRUD
+  const openTaskModal = (task?: Task) => {
+    if (task) {
+      setEditingTask(task);
+      setTaskForm({
+        title: task.title,
+        description: task.description || "",
+        faith_points: task.faith_points,
+        requires_evidence: task.requires_evidence,
       });
     } else {
-      toast({ title: "Tarea creada" });
-      setNewTaskTitle("");
-      setNewTaskDescription("");
-      setNewTaskDueDate("");
-      setNewTaskReward(0);
-      setNewTaskRequiresEvidence(false);
-      setSelectedFollower("");
-      setShowTaskForm(false);
-      loadTasks();
+      setEditingTask(null);
+      setTaskForm({ title: "", description: "", faith_points: 0, requires_evidence: false });
     }
-
-    setIsSaving(false);
+    setShowTaskModal(true);
   };
 
-  const completeTask = async (taskId: string) => {
-    if (!user) return;
+  const saveTask = async () => {
+    if (!profile?.cult_id || !taskForm.title.trim()) return;
 
-    setIsSaving(true);
+    try {
+      if (editingTask) {
+        const { error } = await supabase
+          .from("tasks")
+          .update({
+            title: taskForm.title,
+            description: taskForm.description || null,
+            faith_points: taskForm.faith_points,
+            requires_evidence: taskForm.requires_evidence,
+          })
+          .eq("id", editingTask.id);
 
-    const { error } = await supabase
-      .from("tasks")
-      .update({
-        is_completed: true,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", taskId);
+        if (error) throw error;
+        toast({ title: "Tarea actualizada" });
+      } else {
+        const { error } = await supabase.from("tasks").insert({
+          cult_id: profile.cult_id,
+          title: taskForm.title,
+          description: taskForm.description || null,
+          faith_points: taskForm.faith_points,
+          requires_evidence: taskForm.requires_evidence,
+        });
 
-    if (error) {
+        if (error) throw error;
+        toast({ title: "Tarea creada" });
+      }
+
+      setShowTaskModal(false);
+      loadAllData();
+    } catch (error) {
+      console.error("Error saving task:", error);
       toast({
         title: "Error",
-        description: `No se pudo completar la tarea: ${error.message}`,
+        description: "No se pudo guardar la tarea",
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Tarea completada" });
-      loadTasks();
     }
-
-    setIsSaving(false);
   };
 
-  const deleteTask = async (taskId: string) => {
-    const { error } = await supabase.from("tasks").delete().eq("id", taskId);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: `No se pudo eliminar: ${error.message}`,
-        variant: "destructive",
-      });
-    } else {
+  const deleteTask = async (id: string) => {
+    try {
+      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      if (error) throw error;
       toast({ title: "Tarea eliminada" });
-      loadTasks();
-    }
-  };
-
-  // ============ PREMIOS ============
-  const createReward = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRewardName.trim() || !user || !profile?.cult_id) return;
-
-    setIsSaving(true);
-
-    const tags = newRewardTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
-
-    const { error } = await supabase.from("rewards").insert({
-      cult_id: profile.cult_id,
-      name: newRewardName,
-      description: newRewardDescription || null,
-      faith_points_cost: newRewardCost,
-      tags: tags,
-    });
-
-    if (error) {
+      loadAllData();
+    } catch (error) {
+      console.error("Error deleting task:", error);
       toast({
         title: "Error",
-        description: `No se pudo crear el premio: ${error.message}`,
+        description: "No se pudo eliminar la tarea",
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Premio creado" });
-      setNewRewardName("");
-      setNewRewardDescription("");
-      setNewRewardCost(0);
-      setNewRewardTags("");
-      setShowRewardForm(false);
-      loadRewards();
     }
-
-    setIsSaving(false);
   };
 
-  const purchaseReward = async (reward: Reward) => {
-    if (!user || !profile) return;
-
-    if ((profile.faith_points || 0) < reward.faith_points_cost) {
-      toast({
-        title: "Puntos insuficientes",
-        description: `Necesitas ${reward.faith_points_cost} PF para comprar este premio.`,
-        variant: "destructive",
+  // Reward CRUD
+  const openRewardModal = (reward?: Reward) => {
+    if (reward) {
+      setEditingReward(reward);
+      setRewardForm({
+        title: reward.title,
+        description: reward.description || "",
+        faith_points: reward.faith_points,
       });
-      return;
+    } else {
+      setEditingReward(null);
+      setRewardForm({ title: "", description: "", faith_points: 0 });
     }
+    setShowRewardModal(true);
+  };
 
-    setIsSaving(true);
+  const saveReward = async () => {
+    if (!profile?.cult_id || !rewardForm.title.trim()) return;
 
     try {
-      const { data, error } = await supabase.rpc("purchase_reward", {
-        p_reward_id: reward.id,
-        p_follower_id: user.id,
-      });
+      if (editingReward) {
+        const { error } = await supabase
+          .from("rewards")
+          .update({
+            title: rewardForm.title,
+            description: rewardForm.description || null,
+            faith_points: rewardForm.faith_points,
+          })
+          .eq("id", editingReward.id);
 
-      if (error) throw error;
+        if (error) throw error;
+        toast({ title: "Premio actualizado" });
+      } else {
+        const { error } = await supabase.from("rewards").insert({
+          cult_id: profile.cult_id,
+          title: rewardForm.title,
+          description: rewardForm.description || null,
+          faith_points: rewardForm.faith_points,
+        });
 
-      toast({
-        title: "Premio adquirido",
-        description: `Has obtenido: ${reward.name}`,
-      });
+        if (error) throw error;
+        toast({ title: "Premio creado" });
+      }
 
-      loadRewards();
-      window.location.reload();
+      setShowRewardModal(false);
+      loadAllData();
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Error desconocido";
+      console.error("Error saving reward:", error);
       toast({
         title: "Error",
-        description: `No se pudo comprar: ${msg}`,
+        description: "No se pudo guardar el premio",
         variant: "destructive",
       });
     }
-
-    setIsSaving(false);
   };
 
-  const deleteReward = async (rewardId: string) => {
-    const { error } = await supabase.from("rewards").delete().eq("id", rewardId);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: `No se pudo eliminar: ${error.message}`,
-        variant: "destructive",
-      });
-    } else {
+  const deleteReward = async (id: string) => {
+    try {
+      const { error } = await supabase.from("rewards").delete().eq("id", id);
+      if (error) throw error;
       toast({ title: "Premio eliminado" });
-      loadRewards();
-    }
-  };
-
-  // ============ CONSECUENCIAS ============
-  const createPunishment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPunishmentName.trim() || !user || !profile?.cult_id) return;
-
-    setIsSaving(true);
-
-    const tags = newPunishmentTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
-
-    const { error } = await supabase.from("punishments").insert({
-      cult_id: profile.cult_id,
-      name: newPunishmentName,
-      description: newPunishmentDescription || null,
-      faith_points_cost: newPunishmentCost,
-      tags: tags,
-    });
-
-    if (error) {
+      loadAllData();
+    } catch (error) {
+      console.error("Error deleting reward:", error);
       toast({
         title: "Error",
-        description: `No se pudo crear la consecuencia: ${error.message}`,
+        description: "No se pudo eliminar el premio",
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Consecuencia creada" });
-      setNewPunishmentName("");
-      setNewPunishmentDescription("");
-      setNewPunishmentCost(0);
-      setNewPunishmentTags("");
-      setShowPunishmentForm(false);
-      loadPunishments();
     }
-
-    setIsSaving(false);
   };
 
-  const removePunishment = async (ap: AssignedPunishment) => {
-    if (!user || !profile) return;
-
-    if ((profile.faith_points || 0) < ap.punishments.faith_points_cost) {
-      toast({
-        title: "Puntos insuficientes",
-        description: `Necesitas ${ap.punishments.faith_points_cost} PF para eliminar esta consecuencia.`,
-        variant: "destructive",
+  // Consequence CRUD
+  const openConsequenceModal = (consequence?: Consequence) => {
+    if (consequence) {
+      setEditingConsequence(consequence);
+      setConsequenceForm({
+        title: consequence.title,
+        description: consequence.description || "",
+        faith_points: consequence.faith_points,
       });
-      return;
+    } else {
+      setEditingConsequence(null);
+      setConsequenceForm({ title: "", description: "", faith_points: 0 });
     }
+    setShowConsequenceModal(true);
+  };
 
-    setIsSaving(true);
+  const saveConsequence = async () => {
+    if (!profile?.cult_id || !consequenceForm.title.trim()) return;
 
     try {
-      const { data, error } = await supabase.rpc("remove_punishment", {
-        p_assigned_punishment_id: ap.id,
-        p_follower_id: user.id,
-      });
+      if (editingConsequence) {
+        const { error } = await supabase
+          .from("consequences")
+          .update({
+            title: consequenceForm.title,
+            description: consequenceForm.description || null,
+            faith_points: consequenceForm.faith_points,
+          })
+          .eq("id", editingConsequence.id);
 
-      if (error) throw error;
+        if (error) throw error;
+        toast({ title: "Consecuencia actualizada" });
+      } else {
+        const { error } = await supabase.from("consequences").insert({
+          cult_id: profile.cult_id,
+          title: consequenceForm.title,
+          description: consequenceForm.description || null,
+          faith_points: consequenceForm.faith_points,
+        });
 
-      toast({
-        title: "Consecuencia eliminada",
-        description: `Has eliminado: ${ap.punishments.name}`,
-      });
+        if (error) throw error;
+        toast({ title: "Consecuencia creada" });
+      }
 
-      loadPunishments();
-      window.location.reload();
+      setShowConsequenceModal(false);
+      loadAllData();
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Error desconocido";
+      console.error("Error saving consequence:", error);
       toast({
         title: "Error",
-        description: `No se pudo eliminar: ${msg}`,
+        description: "No se pudo guardar la consecuencia",
         variant: "destructive",
       });
     }
-
-    setIsSaving(false);
   };
 
-  const deletePunishment = async (punishmentId: string) => {
-    const { error } = await supabase.from("punishments").delete().eq("id", punishmentId);
-
-    if (error) {
+  const deleteConsequence = async (id: string) => {
+    try {
+      const { error } = await supabase.from("consequences").delete().eq("id", id);
+      if (error) throw error;
+      toast({ title: "Consecuencia eliminada" });
+      loadAllData();
+    } catch (error) {
+      console.error("Error deleting consequence:", error);
       toast({
         title: "Error",
-        description: `No se pudo eliminar: ${error.message}`,
+        description: "No se pudo eliminar la consecuencia",
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Consecuencia eliminada" });
-      loadPunishments();
     }
   };
 
   if (isLoading) {
     return (
-      <AppLayout title="Recompensas" icon={<Sparkles className="w-5 h-5" />}>
+      <AppLayout title="Recompensas" icon={<Gift className="w-5 h-5" />}>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-gold animate-spin" />
         </div>
@@ -535,641 +351,376 @@ export default function RecompensasPage() {
   }
 
   return (
-    <AppLayout title="Recompensas" icon={<Sparkles className="w-5 h-5" />}>
+    <AppLayout title="Biblioteca de Recompensas" icon={<Gift className="w-5 h-5" />}>
       <BookPage pageKey="recompensas">
         <div className="space-y-6">
           <div className="text-center space-y-2">
-            <h1 className="font-display text-3xl text-foreground">Sistema de Recompensas</h1>
-            <p className="font-body text-muted-foreground">
-              {isDeity ? "Gestión de tareas, premios y consecuencias" : "Tus tareas y recompensas"}
+            <h1 className="font-display text-3xl text-foreground">Biblioteca de Recompensas</h1>
+            <p className="font-body text-sm text-muted-foreground">
+              Crea plantillas para asignar desde las fichas de los fieles
             </p>
           </div>
 
           <Tabs defaultValue="tasks" className="space-y-4">
-            <TabsList className="grid grid-cols-3 gap-1 bg-muted/30 p-1">
-              <TabsTrigger value="tasks">
-                <Settings className="w-4 h-4 mr-2" />
+            <TabsList className="grid w-full grid-cols-3 bg-card/50 border border-border/30">
+              <TabsTrigger value="tasks" className="data-[state=active]:bg-gold/20">
+                <CheckSquare className="w-4 h-4 mr-2" />
                 Tareas
               </TabsTrigger>
-              <TabsTrigger value="rewards">
+              <TabsTrigger value="rewards" className="data-[state=active]:bg-gold/20">
                 <Gift className="w-4 h-4 mr-2" />
                 Premios
               </TabsTrigger>
-              <TabsTrigger value="punishments">
+              <TabsTrigger value="consequences" className="data-[state=active]:bg-gold/20">
                 <AlertTriangle className="w-4 h-4 mr-2" />
                 Consecuencias
               </TabsTrigger>
             </TabsList>
 
-            {/* ============ TAB: TAREAS ============ */}
+            {/* TAREAS */}
             <TabsContent value="tasks" className="space-y-4">
-              <ParchmentCard title="Tareas" icon={<Settings className="w-4 h-4" />}>
-                <div className="space-y-4">
-                  {isDeity && (
-                    <>
-                      {!showTaskForm ? (
-                        <RitualButton
-                          variant="outline"
-                          onClick={() => setShowTaskForm(true)}
-                          className="w-full"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Nueva Tarea
-                        </RitualButton>
-                      ) : (
-                        <form onSubmit={createTask} className="space-y-3 p-4 bg-background/30 rounded-sm border border-border/30">
-                          <input
-                            value={newTaskTitle}
-                            onChange={(e) => setNewTaskTitle(e.target.value)}
-                            placeholder="Título de la tarea"
-                            required
-                            className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                     text-foreground font-body focus:outline-none focus:border-gold/50"
-                          />
-                          <textarea
-                            value={newTaskDescription}
-                            onChange={(e) => setNewTaskDescription(e.target.value)}
-                            placeholder="Descripción (opcional)"
-                            rows={2}
-                            className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                     text-foreground font-body focus:outline-none focus:border-gold/50 resize-none"
-                          />
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="font-body text-xs text-muted-foreground mb-1 block">
-                                Fecha límite
-                              </label>
-                              <input
-                                type="date"
-                                value={newTaskDueDate}
-                                onChange={(e) => setNewTaskDueDate(e.target.value)}
-                                className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                         text-foreground font-body focus:outline-none focus:border-gold/50"
-                              />
-                            </div>
-                            <div>
-                              <label className="font-body text-xs text-muted-foreground mb-1 block">
-                                Puntos de Fe
-                              </label>
-                              <input
-                                type="number"
-                                value={newTaskReward}
-                                onChange={(e) => setNewTaskReward(parseInt(e.target.value) || 0)}
-                                min="0"
-                                className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                         text-foreground font-body focus:outline-none focus:border-gold/50"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="font-body text-xs text-muted-foreground mb-1 block">
-                              Asignar a
-                            </label>
-                            <select
-                              value={selectedFollower}
-                              onChange={(e) => setSelectedFollower(e.target.value)}
-                              required
-                              className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                       text-foreground font-body focus:outline-none focus:border-gold/50"
-                            >
-                              <option value="">Seleccionar fiel</option>
-                              {followers.map((f) => (
-                                <option key={f.id} value={f.id}>
-                                  {f.display_name || "Sin nombre"}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={newTaskRequiresEvidence}
-                              onChange={(e) => setNewTaskRequiresEvidence(e.target.checked)}
-                              className="w-4 h-4 accent-gold"
-                            />
-                            <span className="font-body text-sm text-foreground">
-                              Requiere evidencia fotográfica
-                            </span>
-                          </label>
-                          <div className="flex gap-2">
-                            <RitualButton
-                              type="submit"
-                              variant="gold"
-                              className="flex-1"
-                              disabled={isSaving}
-                            >
-                              Crear Tarea
-                            </RitualButton>
-                            <button
-                              type="button"
-                              onClick={() => setShowTaskForm(false)}
-                              className="px-4 text-sm text-muted-foreground hover:text-foreground"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </>
-                  )}
+              <RitualButton variant="gold" onClick={() => openTaskModal()} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Tarea
+              </RitualButton>
 
-                  {/* Lista de tareas */}
-                  <div className="space-y-2">
-                    {(isDeity ? tasks : myTasks).length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-8">
-                        No hay tareas {isDeity ? "creadas" : "asignadas"}
-                      </p>
-                    ) : (
-                      (isDeity ? tasks : myTasks).map((task) => (
-                        <div
-                          key={task.id}
-                          className={`p-4 bg-background/50 rounded-sm border transition-all ${
-                            task.is_completed
-                              ? "border-border/20 opacity-50"
-                              : "border-border/30"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-heading text-sm text-foreground mb-1">
-                                {task.title}
-                              </h4>
-                              {task.description && (
-                                <p className="font-body text-xs text-muted-foreground mb-2">
-                                  {task.description}
-                                </p>
-                              )}
-                              <div className="flex flex-wrap gap-2 text-xs">
-                                {task.faith_points_reward > 0 && (
-                                  <Badge variant="outline" className="bg-gold/10 border-gold/30">
-                                    <Sparkles className="w-3 h-3 mr-1" />
-                                    {task.faith_points_reward} PF
-                                  </Badge>
-                                )}
-                                {task.due_date && (
-                                  <Badge variant="outline">
-                                    <Calendar className="w-3 h-3 mr-1" />
-                                    {new Date(task.due_date).toLocaleDateString()}
-                                  </Badge>
-                                )}
-                                {task.requires_evidence && (
-                                  <Badge variant="outline">
-                                    <Camera className="w-3 h-3 mr-1" />
-                                    Evidencia
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex gap-1">
-                              {!isDeity && !task.is_completed && (
-                                <button
-                                  onClick={() => completeTask(task.id)}
-                                  className="p-2 text-gold hover:text-gold/80 transition-colors"
-                                  title="Completar"
-                                  disabled={isSaving}
-                                >
-                                  <Check className="w-4 h-4" />
-                                </button>
-                              )}
-                              {isDeity && (
-                                <button
-                                  onClick={() => deleteTask(task.id)}
-                                  className="p-2 text-muted-foreground/30 hover:text-wine transition-colors"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
+              {tasks.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 font-body text-sm">
+                  No hay tareas creadas. Crea plantillas para asignar a los fieles.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {tasks.map((task) => (
+                    <ParchmentCard key={task.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <h3 className="font-heading text-base text-foreground mb-1">{task.title}</h3>
+                          {task.description && (
+                            <p className="font-body text-sm text-muted-foreground">{task.description}</p>
+                          )}
+                          <div className="flex gap-2 mt-2">
+                            {task.faith_points > 0 && (
+                              <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
+                                +{task.faith_points} PF
+                              </Badge>
+                            )}
+                            {task.requires_evidence && (
+                              <Badge variant="outline">Requiere evidencia</Badge>
+                            )}
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </ParchmentCard>
-            </TabsContent>
-
-            {/* ============ TAB: PREMIOS ============ */}
-            <TabsContent value="rewards" className="space-y-4">
-              {isDeity ? (
-                <ParchmentCard title="Premios" icon={<Gift className="w-4 h-4" />}>
-                  <div className="space-y-4">
-                    {!showRewardForm ? (
-                      <RitualButton
-                        variant="outline"
-                        onClick={() => setShowRewardForm(true)}
-                        className="w-full"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nuevo Premio
-                      </RitualButton>
-                    ) : (
-                      <form onSubmit={createReward} className="space-y-3 p-4 bg-background/30 rounded-sm border border-border/30">
-                        <input
-                          value={newRewardName}
-                          onChange={(e) => setNewRewardName(e.target.value)}
-                          placeholder="Nombre del premio"
-                          required
-                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                   text-foreground font-body focus:outline-none focus:border-gold/50"
-                        />
-                        <textarea
-                          value={newRewardDescription}
-                          onChange={(e) => setNewRewardDescription(e.target.value)}
-                          placeholder="Descripción (opcional)"
-                          rows={2}
-                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                   text-foreground font-body focus:outline-none focus:border-gold/50 resize-none"
-                        />
-                        <div>
-                          <label className="font-body text-xs text-muted-foreground mb-1 block">
-                            Costo en Puntos de Fe
-                          </label>
-                          <input
-                            type="number"
-                            value={newRewardCost}
-                            onChange={(e) => setNewRewardCost(parseInt(e.target.value) || 0)}
-                            min="0"
-                            className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                     text-foreground font-body focus:outline-none focus:border-gold/50"
-                          />
-                        </div>
-                        <input
-                          value={newRewardTags}
-                          onChange={(e) => setNewRewardTags(e.target.value)}
-                          placeholder="Etiquetas (separadas por comas)"
-                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                   text-foreground font-body focus:outline-none focus:border-gold/50"
-                        />
-                        <div className="flex gap-2">
-                          <RitualButton
-                            type="submit"
-                            variant="gold"
-                            className="flex-1"
-                            disabled={isSaving}
-                          >
-                            Crear Premio
-                          </RitualButton>
+                        <div className="flex gap-1">
                           <button
-                            type="button"
-                            onClick={() => setShowRewardForm(false)}
-                            className="px-4 text-sm text-muted-foreground hover:text-foreground"
+                            onClick={() => openTaskModal(task)}
+                            className="p-2 text-gold hover:text-gold/80 transition-colors"
                           >
-                            Cancelar
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteTask(task.id)}
+                            className="p-2 text-muted-foreground/30 hover:text-wine transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      </form>
-                    )}
-
-                    <div className="space-y-2">
-                      {rewards.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">
-                          No hay premios creados
-                        </p>
-                      ) : (
-                        rewards.map((reward) => (
-                          <div
-                            key={reward.id}
-                            className="p-4 bg-background/50 rounded-sm border border-border/30"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-heading text-sm text-foreground mb-1">
-                                  {reward.name}
-                                </h4>
-                                {reward.description && (
-                                  <p className="font-body text-xs text-muted-foreground mb-2">
-                                    {reward.description}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap gap-2">
-                                  <Badge variant="outline" className="bg-gold/10 border-gold/30">
-                                    <Sparkles className="w-3 h-3 mr-1" />
-                                    {reward.faith_points_cost} PF
-                                  </Badge>
-                                  {reward.tags.map((tag, i) => (
-                                    <Badge key={i} variant="outline">
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => deleteReward(reward.id)}
-                                className="p-2 text-muted-foreground/30 hover:text-wine transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </ParchmentCard>
-              ) : (
-                <>
-                  {/* Tienda */}
-                  <ParchmentCard title="Tienda de Premios" icon={<ShoppingCart className="w-4 h-4" />}>
-                    <div className="space-y-3">
-                      <div className="text-center p-3 bg-gold/10 rounded-sm border border-gold/30">
-                        <p className="font-body text-sm text-muted-foreground">
-                          Balance actual
-                        </p>
-                        <p className="font-display text-2xl text-gold">
-                          {profile?.faith_points || 0} PF
-                        </p>
                       </div>
-
-                      <div className="space-y-2">
-                        {rewards.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-8">
-                            No hay premios disponibles
-                          </p>
-                        ) : (
-                          rewards.map((reward) => {
-                            const canAfford = (profile?.faith_points || 0) >= reward.faith_points_cost;
-                            return (
-                              <div
-                                key={reward.id}
-                                className="p-4 bg-background/50 rounded-sm border border-border/30"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <h4 className="font-heading text-sm text-foreground mb-1">
-                                      {reward.name}
-                                    </h4>
-                                    {reward.description && (
-                                      <p className="font-body text-xs text-muted-foreground mb-2">
-                                        {reward.description}
-                                      </p>
-                                    )}
-                                    <div className="flex flex-wrap gap-2">
-                                      <Badge
-                                        variant="outline"
-                                        className={`${
-                                          canAfford
-                                            ? "bg-gold/10 border-gold/30"
-                                            : "bg-muted/10 border-muted/30"
-                                        }`}
-                                      >
-                                        <Sparkles className="w-3 h-3 mr-1" />
-                                        {reward.faith_points_cost} PF
-                                      </Badge>
-                                      {reward.tags.map((tag, i) => (
-                                        <Badge key={i} variant="outline">
-                                          {tag}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <RitualButton
-                                    variant={canAfford ? "gold" : "outline"}
-                                    onClick={() => purchaseReward(reward)}
-                                    disabled={!canAfford || isSaving}
-                                    className="flex-shrink-0"
-                                  >
-                                    <ShoppingCart className="w-4 h-4" />
-                                  </RitualButton>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  </ParchmentCard>
-
-                  {/* Mis premios */}
-                  <ParchmentCard title="Mis Premios" icon={<Gift className="w-4 h-4" />}>
-                    <div className="space-y-2">
-                      {myRewards.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">
-                          No has obtenido premios todavía
-                        </p>
-                      ) : (
-                        myRewards.map((ar) => (
-                          <div
-                            key={ar.id}
-                            className="p-4 bg-background/50 rounded-sm border border-gold/30"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-heading text-sm text-foreground mb-1">
-                                  {ar.rewards.name}
-                                </h4>
-                                {ar.rewards.description && (
-                                  <p className="font-body text-xs text-muted-foreground mb-1">
-                                    {ar.rewards.description}
-                                  </p>
-                                )}
-                                <p className="font-body text-xs text-muted-foreground/70">
-                                  Obtenido: {new Date(ar.awarded_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <Gift className="w-5 h-5 text-gold flex-shrink-0" />
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </ParchmentCard>
-                </>
+                    </ParchmentCard>
+                  ))}
+                </div>
               )}
             </TabsContent>
 
-            {/* ============ TAB: CONSECUENCIAS ============ */}
-            <TabsContent value="punishments" className="space-y-4">
-              {isDeity ? (
-                <ParchmentCard title="Consecuencias" icon={<AlertTriangle className="w-4 h-4" />}>
-                  <div className="space-y-4">
-                    {!showPunishmentForm ? (
-                      <RitualButton
-                        variant="outline"
-                        onClick={() => setShowPunishmentForm(true)}
-                        className="w-full"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nueva Consecuencia
-                      </RitualButton>
-                    ) : (
-                      <form onSubmit={createPunishment} className="space-y-3 p-4 bg-background/30 rounded-sm border border-border/30">
-                        <input
-                          value={newPunishmentName}
-                          onChange={(e) => setNewPunishmentName(e.target.value)}
-                          placeholder="Nombre de la consecuencia"
-                          required
-                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                   text-foreground font-body focus:outline-none focus:border-gold/50"
-                        />
-                        <textarea
-                          value={newPunishmentDescription}
-                          onChange={(e) => setNewPunishmentDescription(e.target.value)}
-                          placeholder="Descripción (opcional)"
-                          rows={2}
-                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                   text-foreground font-body focus:outline-none focus:border-gold/50 resize-none"
-                        />
-                        <div>
-                          <label className="font-body text-xs text-muted-foreground mb-1 block">
-                            Costo para eliminarla (PF)
-                          </label>
-                          <input
-                            type="number"
-                            value={newPunishmentCost}
-                            onChange={(e) => setNewPunishmentCost(parseInt(e.target.value) || 0)}
-                            min="0"
-                            className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                     text-foreground font-body focus:outline-none focus:border-gold/50"
-                          />
+            {/* PREMIOS */}
+            <TabsContent value="rewards" className="space-y-4">
+              <RitualButton variant="gold" onClick={() => openRewardModal()} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo Premio
+              </RitualButton>
+
+              {rewards.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 font-body text-sm">
+                  No hay premios creados. Los fieles podrán comprarlos en la tienda.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {rewards.map((reward) => (
+                    <ParchmentCard key={reward.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <h3 className="font-heading text-base text-foreground mb-1">{reward.title}</h3>
+                          {reward.description && (
+                            <p className="font-body text-sm text-muted-foreground">{reward.description}</p>
+                          )}
+                          {reward.faith_points > 0 && (
+                            <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30 mt-2">
+                              {reward.faith_points} PF
+                            </Badge>
+                          )}
                         </div>
-                        <input
-                          value={newPunishmentTags}
-                          onChange={(e) => setNewPunishmentTags(e.target.value)}
-                          placeholder="Etiquetas (separadas por comas)"
-                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                   text-foreground font-body focus:outline-none focus:border-gold/50"
-                        />
-                        <div className="flex gap-2">
-                          <RitualButton
-                            type="submit"
-                            variant="gold"
-                            className="flex-1"
-                            disabled={isSaving}
-                          >
-                            Crear Consecuencia
-                          </RitualButton>
+                        <div className="flex gap-1">
                           <button
-                            type="button"
-                            onClick={() => setShowPunishmentForm(false)}
-                            className="px-4 text-sm text-muted-foreground hover:text-foreground"
+                            onClick={() => openRewardModal(reward)}
+                            className="p-2 text-gold hover:text-gold/80 transition-colors"
                           >
-                            Cancelar
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteReward(reward.id)}
+                            className="p-2 text-muted-foreground/30 hover:text-wine transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      </form>
-                    )}
+                      </div>
+                    </ParchmentCard>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
 
-                    <div className="space-y-2">
-                      {punishments.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">
-                          No hay consecuencias creadas
-                        </p>
-                      ) : (
-                        punishments.map((punishment) => (
-                          <div
-                            key={punishment.id}
-                            className="p-4 bg-background/50 rounded-sm border border-border/30"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-heading text-sm text-foreground mb-1">
-                                  {punishment.name}
-                                </h4>
-                                {punishment.description && (
-                                  <p className="font-body text-xs text-muted-foreground mb-2">
-                                    {punishment.description}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap gap-2">
-                                  <Badge variant="outline" className="bg-wine/10 border-wine/30">
-                                    <Sparkles className="w-3 h-3 mr-1" />
-                                    {punishment.faith_points_cost} PF para eliminar
-                                  </Badge>
-                                  {punishment.tags.map((tag, i) => (
-                                    <Badge key={i} variant="outline">
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => deletePunishment(punishment.id)}
-                                className="p-2 text-muted-foreground/30 hover:text-wine transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </ParchmentCard>
+            {/* CONSECUENCIAS */}
+            <TabsContent value="consequences" className="space-y-4">
+              <RitualButton variant="gold" onClick={() => openConsequenceModal()} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Consecuencia
+              </RitualButton>
+
+              {consequences.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 font-body text-sm">
+                  No hay consecuencias creadas.
+                </p>
               ) : (
-                <ParchmentCard title="Mis Consecuencias" icon={<AlertTriangle className="w-4 h-4" />}>
-                  <div className="space-y-3">
-                    <div className="text-center p-3 bg-gold/10 rounded-sm border border-gold/30">
-                      <p className="font-body text-sm text-muted-foreground">
-                        Balance actual
-                      </p>
-                      <p className="font-display text-2xl text-gold">
-                        {profile?.faith_points || 0} PF
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      {myPunishments.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">
-                          No tienes consecuencias activas
-                        </p>
-                      ) : (
-                        myPunishments.map((ap) => {
-                          const canAfford = (profile?.faith_points || 0) >= ap.punishments.faith_points_cost;
-                          return (
-                            <div
-                              key={ap.id}
-                              className="p-4 bg-background/50 rounded-sm border border-wine/30"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-heading text-sm text-foreground mb-1">
-                                    {ap.punishments.name}
-                                  </h4>
-                                  {ap.punishments.description && (
-                                    <p className="font-body text-xs text-muted-foreground mb-1">
-                                      {ap.punishments.description}
-                                    </p>
-                                  )}
-                                  {ap.notes && (
-                                    <p className="font-body text-xs text-muted-foreground/70 mb-2">
-                                      Nota: {ap.notes}
-                                    </p>
-                                  )}
-                                  <Badge
-                                    variant="outline"
-                                    className={`${
-                                      canAfford
-                                        ? "bg-gold/10 border-gold/30"
-                                        : "bg-muted/10 border-muted/30"
-                                    }`}
-                                  >
-                                    <X className="w-3 h-3 mr-1" />
-                                    Eliminar: {ap.punishments.faith_points_cost} PF
-                                  </Badge>
-                                </div>
-                                <RitualButton
-                                  variant={canAfford ? "gold" : "outline"}
-                                  onClick={() => removePunishment(ap)}
-                                  disabled={!canAfford || isSaving}
-                                  className="flex-shrink-0"
-                                >
-                                  <X className="w-4 h-4" />
-                                </RitualButton>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                </ParchmentCard>
+                <div className="space-y-2">
+                  {consequences.map((consequence) => (
+                    <ParchmentCard key={consequence.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <h3 className="font-heading text-base text-foreground mb-1">{consequence.title}</h3>
+                          {consequence.description && (
+                            <p className="font-body text-sm text-muted-foreground">{consequence.description}</p>
+                          )}
+                          {consequence.faith_points > 0 && (
+                            <Badge variant="outline" className="bg-wine/20 text-wine border-wine/40 mt-2">
+                              {consequence.faith_points} PF para quitar
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openConsequenceModal(consequence)}
+                            className="p-2 text-gold hover:text-gold/80 transition-colors"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteConsequence(consequence.id)}
+                            className="p-2 text-muted-foreground/30 hover:text-wine transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </ParchmentCard>
+                  ))}
+                </div>
               )}
             </TabsContent>
           </Tabs>
         </div>
       </BookPage>
+
+      {/* Modal Tarea */}
+      <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
+        <DialogContent className="bg-card border-2 border-gold/30">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl text-foreground">
+              {editingTask ? "Editar Tarea" : "Nueva Tarea"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Título *
+              </label>
+              <Input
+                value={taskForm.title}
+                onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                placeholder="Nombre de la tarea"
+              />
+            </div>
+
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Descripción
+              </label>
+              <Textarea
+                value={taskForm.description}
+                onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                placeholder="Detalles opcionales"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Puntos de Fe
+              </label>
+              <Input
+                type="number"
+                value={taskForm.faith_points}
+                onChange={(e) => setTaskForm({ ...taskForm, faith_points: parseInt(e.target.value) || 0 })}
+                min="0"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={taskForm.requires_evidence}
+                onChange={(e) => setTaskForm({ ...taskForm, requires_evidence: e.target.checked })}
+                className="w-4 h-4 accent-gold"
+              />
+              <span className="font-body text-sm text-foreground">Requiere evidencia fotográfica</span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <button
+              onClick={() => setShowTaskModal(false)}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancelar
+            </button>
+            <RitualButton variant="gold" onClick={saveTask}>
+              <Save className="w-4 h-4 mr-2" />
+              Guardar
+            </RitualButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Premio */}
+      <Dialog open={showRewardModal} onOpenChange={setShowRewardModal}>
+        <DialogContent className="bg-card border-2 border-gold/30">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl text-foreground">
+              {editingReward ? "Editar Premio" : "Nuevo Premio"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Título *
+              </label>
+              <Input
+                value={rewardForm.title}
+                onChange={(e) => setRewardForm({ ...rewardForm, title: e.target.value })}
+                placeholder="Nombre del premio"
+              />
+            </div>
+
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Descripción
+              </label>
+              <Textarea
+                value={rewardForm.description}
+                onChange={(e) => setRewardForm({ ...rewardForm, description: e.target.value })}
+                placeholder="Detalles opcionales"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Costo en Puntos de Fe
+              </label>
+              <Input
+                type="number"
+                value={rewardForm.faith_points}
+                onChange={(e) => setRewardForm({ ...rewardForm, faith_points: parseInt(e.target.value) || 0 })}
+                min="0"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              onClick={() => setShowRewardModal(false)}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancelar
+            </button>
+            <RitualButton variant="gold" onClick={saveReward}>
+              <Save className="w-4 h-4 mr-2" />
+              Guardar
+            </RitualButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Consecuencia */}
+      <Dialog open={showConsequenceModal} onOpenChange={setShowConsequenceModal}>
+        <DialogContent className="bg-card border-2 border-gold/30">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl text-foreground">
+              {editingConsequence ? "Editar Consecuencia" : "Nueva Consecuencia"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Título *
+              </label>
+              <Input
+                value={consequenceForm.title}
+                onChange={(e) => setConsequenceForm({ ...consequenceForm, title: e.target.value })}
+                placeholder="Nombre de la consecuencia"
+              />
+            </div>
+
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Descripción
+              </label>
+              <Textarea
+                value={consequenceForm.description}
+                onChange={(e) => setConsequenceForm({ ...consequenceForm, description: e.target.value })}
+                placeholder="Detalles opcionales"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">
+                Puntos de Fe para eliminar
+              </label>
+              <Input
+                type="number"
+                value={consequenceForm.faith_points}
+                onChange={(e) => setConsequenceForm({ ...consequenceForm, faith_points: parseInt(e.target.value) || 0 })}
+                min="0"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              onClick={() => setShowConsequenceModal(false)}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancelar
+            </button>
+            <RitualButton variant="gold" onClick={saveConsequence}>
+              <Save className="w-4 h-4 mr-2" />
+              Guardar
+            </RitualButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
