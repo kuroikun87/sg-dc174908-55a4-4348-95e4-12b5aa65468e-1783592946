@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,6 @@ import {
   Plus,
   CheckSquare,
   Trash2,
-  Separator,
 } from "lucide-react";
 
 interface MemberSheetProps {
@@ -65,27 +65,47 @@ interface MemberData {
   ranks: { name: string; level: number } | null;
 }
 
+interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  faith_points_reward: number;
+  requires_evidence: boolean;
+}
+
+interface Reward {
+  id: string;
+  name: string;
+  description: string | null;
+  faith_points_cost: number;
+}
+
+interface Punishment {
+  id: string;
+  name: string;
+  description: string | null;
+  faith_points_cost: number;
+}
+
 export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const { toast } = useToast();
-  const { profile: viewerProfile } = useAuth();
+  const { profile, user } = useAuth();
   const [member, setMember] = useState<MemberData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [rewards, setRewards] = useState<any[]>([]);
-  const [consequences, setConsequences] = useState<any[]>([]);
+  
+  // Datos asignados al fiel
+  const [followerTasks, setFollowerTasks] = useState<any[]>([]);
+  const [followerRewards, setFollowerRewards] = useState<any[]>([]);
+  const [followerPunishments, setFollowerPunishments] = useState<any[]>([]);
+  
+  // Biblioteca de templates
+  const [libraryTasks, setLibraryTasks] = useState<Task[]>([]);
+  const [libraryRewards, setLibraryRewards] = useState<Reward[]>([]);
+  const [libraryPunishments, setLibraryPunishments] = useState<Punishment[]>([]);
+  
   const [events, setEvents] = useState<any[]>([]);
   const [fetishes, setFetishes] = useState<any[]>([]);
   const [faithLog, setFaithLog] = useState<any[]>([]);
-
-  // Para asignación
-  const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
-  const [rewardTemplates, setRewardTemplates] = useState<any[]>([]);
-  const [consequenceTemplates, setConsequenceTemplates] = useState<any[]>([]);
-
-  // Modales de asignación
-  const [showTaskAssign, setShowTaskAssign] = useState(false);
-  const [showRewardAssign, setShowRewardAssign] = useState(false);
-  const [showConsequenceAssign, setShowConsequenceAssign] = useState(false);
 
   const [assignMode, setAssignMode] = useState<"library" | "custom">("library");
   const [rewardAssignMode, setRewardAssignMode] = useState<"library" | "custom">("library");
@@ -109,32 +129,32 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     faith_points: 0,
   });
 
-  const isDeity = viewerProfile?.role === "deity";
+  const isDeity = profile?.role === "deity";
 
   useEffect(() => {
     if (memberId && isOpen) {
       loadMemberData();
       if (isDeity) {
-        loadTemplates();
+        loadLibrary();
       }
     }
   }, [memberId, isOpen, isDeity]);
 
-  const loadTemplates = async () => {
-    if (!viewerProfile?.cult_id) return;
+  const loadLibrary = async () => {
+    if (!profile?.cult_id) return;
 
     try {
-      const [tasksRes, rewardsRes, consequencesRes] = await Promise.all([
-        supabase.from("tasks").select("*").eq("cult_id", viewerProfile.cult_id),
-        supabase.from("rewards").select("*").eq("cult_id", viewerProfile.cult_id),
-        supabase.from("consequences").select("*").eq("cult_id", viewerProfile.cult_id),
+      const [tasksRes, rewardsRes, punishmentsRes] = await Promise.all([
+        supabase.from("tasks").select("*").eq("cult_id", profile.cult_id),
+        supabase.from("rewards").select("*").eq("cult_id", profile.cult_id),
+        supabase.from("punishments").select("*").eq("cult_id", profile.cult_id),
       ]);
 
-      setTaskTemplates(tasksRes.data || []);
-      setRewardTemplates(rewardsRes.data || []);
-      setConsequenceTemplates(consequencesRes.data || []);
+      setLibraryTasks(tasksRes.data || []);
+      setLibraryRewards(rewardsRes.data || []);
+      setLibraryPunishments(punishmentsRes.data || []);
     } catch (error) {
-      console.error("Error loading templates:", error);
+      console.error("Error loading library:", error);
     }
   };
 
@@ -156,25 +176,22 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         .from("follower_tasks")
         .select("*")
         .eq("follower_id", memberId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      setTasks(tasksData || []);
+        .order("created_at", { ascending: false });
+      setFollowerTasks(tasksData || []);
 
       const { data: rewardsData } = await supabase
         .from("follower_rewards")
         .select("*")
         .eq("follower_id", memberId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      setRewards(rewardsData || []);
+        .order("created_at", { ascending: false });
+      setFollowerRewards(rewardsData || []);
 
-      const { data: consequencesData } = await supabase
-        .from("follower_consequences")
+      const { data: punishmentsData } = await supabase
+        .from("follower_punishments")
         .select("*")
         .eq("follower_id", memberId)
-        .eq("is_fulfilled", false)
         .order("created_at", { ascending: false });
-      setConsequences(consequencesData || []);
+      setFollowerPunishments(punishmentsData || []);
 
       const { data: eventsData } = await supabase
         .from("calendar_events")
@@ -211,11 +228,13 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     setIsLoading(false);
   };
 
+  const loadFollowerData = loadMemberData;
+
   // Asignar tarea desde template
   const assignTaskFromTemplate = async (templateId: string) => {
     if (!member?.cult_id || !memberId) return;
 
-    const template = taskTemplates.find((t) => t.id === templateId);
+    const template = libraryTasks.find((t) => t.id === templateId);
     if (!template) return;
 
     try {
@@ -224,7 +243,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         cult_id: member.cult_id,
         title: template.title,
         description: template.description,
-        faith_points: template.faith_points,
+        faith_points: template.faith_points_reward,
         requires_evidence: template.requires_evidence,
         is_completed: false,
       });
@@ -281,16 +300,16 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const assignRewardFromTemplate = async (templateId: string) => {
     if (!member?.cult_id || !memberId) return;
 
-    const template = rewardTemplates.find((t) => t.id === templateId);
+    const template = libraryRewards.find((t) => t.id === templateId);
     if (!template) return;
 
     try {
       const { error } = await supabase.from("follower_rewards").insert({
         follower_id: memberId,
         cult_id: member.cult_id,
-        title: template.title,
+        title: template.name,
         description: template.description,
-        faith_points: template.faith_points,
+        faith_points: template.faith_points_cost,
         is_used: false,
       });
 
@@ -344,16 +363,16 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const assignConsequenceFromTemplate = async (templateId: string) => {
     if (!member?.cult_id || !memberId) return;
 
-    const template = consequenceTemplates.find((t) => t.id === templateId);
+    const template = libraryPunishments.find((t) => t.id === templateId);
     if (!template) return;
 
     try {
       const { error } = await supabase.from("follower_consequences").insert({
         follower_id: memberId,
         cult_id: member.cult_id,
-        title: template.title,
+        title: template.name,
         description: template.description,
-        faith_points: template.faith_points,
+        faith_points: template.faith_points_cost,
         is_fulfilled: false,
       });
 
@@ -672,10 +691,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
               <TabsContent value="actividad" className="space-y-4 mt-4">
                 <ParchmentCard title="Tareas" icon={<CheckSquare className="w-4 h-4" />}>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {tasks.length === 0 ? (
+                    {followerTasks.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">Sin tareas</p>
                     ) : (
-                      tasks.map((task) => (
+                      followerTasks.map((task) => (
                         <div key={task.id} className="flex items-start gap-2 p-2 bg-background/50 rounded-sm border border-border/20">
                           {task.is_completed ? (
                             <CheckCircle2 className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" />
@@ -696,10 +715,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
                 <ParchmentCard title="Premios" icon={<Gift className="w-4 h-4" />}>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {rewards.length === 0 ? (
+                    {followerRewards.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">Sin premios</p>
                     ) : (
-                      rewards.map((reward) => (
+                      followerRewards.map((reward) => (
                         <div key={reward.id} className="flex items-start gap-2 p-2 bg-background/50 rounded-sm border border-gold/20">
                           <Gift className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
@@ -716,10 +735,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
                 <ParchmentCard title="Consecuencias" icon={<AlertTriangle className="w-4 h-4" />}>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {consequences.length === 0 ? (
+                    {followerPunishments.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">Sin consecuencias</p>
                     ) : (
-                      consequences.map((cons) => (
+                      followerPunishments.map((cons) => (
                         <div key={cons.id} className="flex items-start gap-2 p-2 bg-background/50 rounded-sm border border-wine/20">
                           <AlertTriangle className="w-4 h-4 text-wine flex-shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
@@ -828,12 +847,12 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             </TabsList>
 
             <TabsContent value="templates" className="space-y-2">
-              {taskTemplates.length === 0 ? (
+              {libraryTasks.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   No hay tareas en la biblioteca
                 </p>
               ) : (
-                taskTemplates.map((task) => (
+                libraryTasks.map((task) => (
                   <div key={task.id} className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2">
                     <div>
                       <h4 className="font-heading text-sm text-foreground">{task.title}</h4>
@@ -841,9 +860,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         <p className="font-body text-xs text-muted-foreground mt-1">{task.description}</p>
                       )}
                       <div className="flex gap-2 mt-2">
-                        {task.faith_points > 0 && (
+                        {task.faith_points_reward > 0 && (
                           <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30 text-xs">
-                            +{task.faith_points} PF
+                            +{task.faith_points_reward} PF
                           </Badge>
                         )}
                         {task.requires_evidence && (
@@ -923,21 +942,21 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             </TabsList>
 
             <TabsContent value="templates" className="space-y-2">
-              {rewardTemplates.length === 0 ? (
+              {libraryRewards.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   No hay premios en la biblioteca
                 </p>
               ) : (
-                rewardTemplates.map((reward) => (
+                libraryRewards.map((reward) => (
                   <div key={reward.id} className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2">
                     <div>
-                      <h4 className="font-heading text-sm text-foreground">{reward.title}</h4>
+                      <h4 className="font-heading text-sm text-foreground">{reward.name}</h4>
                       {reward.description && (
                         <p className="font-body text-xs text-muted-foreground mt-1">{reward.description}</p>
                       )}
-                      {reward.faith_points > 0 && (
+                      {reward.faith_points_cost > 0 && (
                         <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30 text-xs mt-2">
-                          {reward.faith_points} PF
+                          {reward.faith_points_cost} PF
                         </Badge>
                       )}
                     </div>
@@ -1004,21 +1023,21 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             </TabsList>
 
             <TabsContent value="templates" className="space-y-2">
-              {consequenceTemplates.length === 0 ? (
+              {libraryPunishments.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   No hay consecuencias en la biblioteca
                 </p>
               ) : (
-                consequenceTemplates.map((cons) => (
+                libraryPunishments.map((cons) => (
                   <div key={cons.id} className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2">
                     <div>
-                      <h4 className="font-heading text-sm text-foreground">{cons.title}</h4>
+                      <h4 className="font-heading text-sm text-foreground">{cons.name}</h4>
                       {cons.description && (
                         <p className="font-body text-xs text-muted-foreground mt-1">{cons.description}</p>
                       )}
-                      {cons.faith_points > 0 && (
+                      {cons.faith_points_cost > 0 && (
                         <Badge variant="outline" className="bg-wine/20 text-wine border-wine/40 text-xs mt-2">
-                          {cons.faith_points} PF para quitar
+                          {cons.faith_points_cost} PF para quitar
                         </Badge>
                       )}
                     </div>
