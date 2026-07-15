@@ -12,6 +12,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Play,
   Pause,
   VolumeX,
@@ -96,6 +103,8 @@ export default function SesionPage() {
   const [recordedIntervals, setRecordedIntervals] = useState<number[]>([]);
   const [lastBeatTime, setLastBeatTime] = useState<number | null>(null);
   const [newPatternName, setNewPatternName] = useState("");
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
+  const [ecgBeats, setEcgBeats] = useState<number[]>([]); // Timestamps relativos de cada beat
   
   // Nueva tarjeta
   const [showCardForm, setShowCardForm] = useState(false);
@@ -108,6 +117,13 @@ export default function SesionPage() {
   const [cardDuration, setCardDuration] = useState<number | null>(null);
   const [showTimer, setShowTimer] = useState(true);
   const [cardTimeLeft, setCardTimeLeft] = useState<number | null>(null);
+  
+  // Modal de configuración de tarjeta
+  const [showCardConfig, setShowCardConfig] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<SessionCard | null>(null);
+  const [configDuration, setConfigDuration] = useState(60);
+  const [configShowTimer, setConfigShowTimer] = useState(true);
+  const [configIsPermanent, setConfigIsPermanent] = useState(false);
 
   const isDeity = profile?.role === "deity";
 
@@ -338,18 +354,26 @@ export default function SesionPage() {
 
     if (isRecording) {
       const now = Date.now();
-      if (lastBeatTime !== null) {
+      if (lastBeatTime !== null && recordingStartTime !== null) {
         const interval = now - lastBeatTime;
         setRecordedIntervals([...recordedIntervals, interval]);
+        const relativeTime = now - recordingStartTime;
+        setEcgBeats([...ecgBeats, relativeTime]);
+      } else if (recordingStartTime !== null) {
+        // Primer beat
+        setEcgBeats([0]);
       }
       setLastBeatTime(now);
     }
   };
 
   const startRecording = () => {
+    const now = Date.now();
     setIsRecording(true);
     setRecordedIntervals([]);
     setLastBeatTime(null);
+    setRecordingStartTime(now);
+    setEcgBeats([]);
     toast({
       title: "Grabando patrón",
       description: "Pulsa el botón de beat siguiendo el ritmo deseado",
@@ -359,6 +383,7 @@ export default function SesionPage() {
   const stopRecording = () => {
     setIsRecording(false);
     setLastBeatTime(null);
+    setRecordingStartTime(null);
   };
 
   const savePattern = async () => {
@@ -443,6 +468,38 @@ export default function SesionPage() {
       toast({ title: "Tarjeta eliminada" });
       loadData();
     }
+  };
+
+  const openCardConfig = (card: SessionCard) => {
+    setSelectedCard(card);
+    setConfigDuration(60);
+    setConfigShowTimer(true);
+    setConfigIsPermanent(false);
+    setShowCardConfig(true);
+  };
+
+  const sendCardWithConfig = async () => {
+    if (!activeSession || !isDeity || !selectedCard) return;
+
+    const duration = configIsPermanent ? null : configDuration;
+
+    await supabase
+      .from("active_sessions")
+      .update({
+        current_card_id: selectedCard.id,
+        card_duration_seconds: duration,
+        card_show_timer: configShowTimer,
+        card_started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", activeSession.id);
+
+    setActiveCard(selectedCard);
+    setCardDuration(duration);
+    setShowTimer(configShowTimer);
+    setCardTimeLeft(duration);
+    setShowCardConfig(false);
+    setSelectedCard(null);
   };
 
   const sendCard = async (card: SessionCard, duration: number | null, showTimer: boolean) => {
@@ -537,6 +594,98 @@ export default function SesionPage() {
         : [...prev, followerId]
     );
   };
+
+  // Componente de visualización ECG
+  function ECGVisualization() {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const animationFrameRef = useRef<number>();
+
+    useEffect(() => {
+      if (!isRecording || !canvasRef.current || !recordingStartTime) return;
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const centerY = height / 2;
+      const timeWindow = 10000; // 10 segundos visibles
+
+      const draw = () => {
+        const now = Date.now();
+        const elapsed = now - recordingStartTime;
+
+        // Limpiar
+        ctx.fillStyle = "#1a0f0a";
+        ctx.fillRect(0, 0, width, height);
+
+        // Línea base
+        ctx.strokeStyle = "#43362b40";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(width, centerY);
+        ctx.stroke();
+
+        // Línea ECG avanzando
+        const currentX = ((elapsed % timeWindow) / timeWindow) * width;
+        ctx.strokeStyle = "#D4AF3780";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(currentX, 0);
+        ctx.lineTo(currentX, height);
+        ctx.stroke();
+
+        // Dibujar beats
+        ctx.strokeStyle = "#D4AF37";
+        ctx.lineWidth = 3;
+        ecgBeats.forEach((beatTime) => {
+          const timeSinceBeat = elapsed - beatTime;
+          if (timeSinceBeat >= 0 && timeSinceBeat < timeWindow) {
+            const x = ((timeSinceBeat / timeWindow) * width + currentX) % width;
+            
+            // Forma del beat: spike hacia arriba
+            ctx.beginPath();
+            ctx.moveTo(x - 10, centerY);
+            ctx.lineTo(x - 5, centerY - 40);
+            ctx.lineTo(x, centerY);
+            ctx.lineTo(x + 5, centerY + 20);
+            ctx.lineTo(x + 10, centerY);
+            ctx.stroke();
+          }
+        });
+
+        // Tiempo transcurrido
+        ctx.fillStyle = "#D4AF37";
+        ctx.font = "12px monospace";
+        ctx.fillText(`${(elapsed / 1000).toFixed(1)}s`, 10, 20);
+
+        animationFrameRef.current = requestAnimationFrame(draw);
+      };
+
+      draw();
+
+      return () => {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
+    }, [isRecording, ecgBeats, recordingStartTime]);
+
+    if (!isRecording) return null;
+
+    return (
+      <div className="relative w-full h-32 bg-background/80 rounded-sm border border-gold/30 overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          width={800}
+          height={128}
+          className="w-full h-full"
+        />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -796,9 +945,9 @@ export default function SesionPage() {
                           </div>
                           <div className="flex gap-1">
                             <button
-                              onClick={() => sendCard(card, 60, true)}
+                              onClick={() => openCardConfig(card)}
                               className="p-1 text-gold hover:text-gold/80 transition-colors"
-                              title="Enviar (1 min)"
+                              title="Enviar tarjeta"
                             >
                               <Play className="w-4 h-4" />
                             </button>
@@ -834,6 +983,10 @@ export default function SesionPage() {
                         <p className="font-body text-sm text-muted-foreground text-center">
                           Grabando... Pulsa el beat siguiendo tu ritmo
                         </p>
+                        
+                        {/* Visualización ECG */}
+                        <ECGVisualization />
+                        
                         <RitualButton onClick={manualBeat} className="w-full">
                           <Circle className="w-4 h-4 mr-2" />
                           Beat
@@ -916,6 +1069,93 @@ export default function SesionPage() {
           )}
         </div>
       </BookPage>
+
+      {/* Modal de configuración de tarjeta */}
+      <Dialog open={showCardConfig} onOpenChange={setShowCardConfig}>
+        <DialogContent className="bg-card border-2 border-gold/30">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl text-foreground">
+              Configurar Tarjeta
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-heading text-sm text-foreground mb-2">
+                {selectedCard?.title}
+              </h4>
+              {selectedCard?.description && (
+                <p className="font-body text-xs text-muted-foreground">
+                  {selectedCard.description}
+                </p>
+              )}
+            </div>
+
+            {/* Duración */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={configIsPermanent}
+                  onChange={(e) => setConfigIsPermanent(e.target.checked)}
+                  className="w-4 h-4 accent-gold"
+                />
+                <span className="font-body text-sm text-foreground">
+                  Permanente (hasta retirarla)
+                </span>
+              </label>
+
+              {!configIsPermanent && (
+                <div className="space-y-1">
+                  <label className="font-body text-xs text-muted-foreground block">
+                    Duración (segundos)
+                  </label>
+                  <input
+                    type="number"
+                    value={configDuration}
+                    onChange={(e) => setConfigDuration(parseInt(e.target.value) || 60)}
+                    min="10"
+                    step="10"
+                    className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {Math.floor(configDuration / 60)}:{(configDuration % 60).toString().padStart(2, "0")} min
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Visibilidad del temporizador */}
+            {!configIsPermanent && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={configShowTimer}
+                  onChange={(e) => setConfigShowTimer(e.target.checked)}
+                  className="w-4 h-4 accent-gold"
+                />
+                <span className="font-body text-sm text-foreground">
+                  Mostrar temporizador al fiel
+                </span>
+              </label>
+            )}
+          </div>
+
+          <DialogFooter>
+            <button
+              onClick={() => setShowCardConfig(false)}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancelar
+            </button>
+            <RitualButton variant="gold" onClick={sendCardWithConfig}>
+              <Play className="w-4 h-4 mr-2" />
+              Enviar
+            </RitualButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
