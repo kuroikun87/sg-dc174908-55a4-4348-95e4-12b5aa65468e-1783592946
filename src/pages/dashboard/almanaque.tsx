@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, X, Sun, Moon, Star, AlertCircle, Loader2 } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, X, Sun, Moon, Star, AlertCircle, Loader2, Trash2 } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ParchmentCard } from "@/components/ui/parchment-card";
@@ -147,6 +147,47 @@ export default function AlmanaquePage() {
         title: "Evento eliminado",
         description: "El evento ha sido borrado del almanaque.",
       });
+      loadEvents();
+    }
+  };
+
+  const handleAddEvent = async () => {
+    if (!newEventTitle.trim() || !selectedDate || !user) return;
+
+    // Crear timestamp completo con la fecha y hora seleccionadas en la zona horaria local del usuario
+    const eventDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    
+    if (newEventTime) {
+      const [hours, minutes] = newEventTime.split(":").map(Number);
+      eventDateTime.setHours(hours, minutes, 0, 0);
+    } else {
+      eventDateTime.setHours(0, 0, 0, 0);
+    }
+
+    // Guardar como ISO string (UTC) - Postgres lo almacena automáticamente con timezone
+    const { error } = await supabase.from("calendar_events").insert({
+      title: newEventTitle,
+      event_type: newEventType,
+      event_date: eventDateTime.toISOString(), // Timestamp completo en UTC
+      event_time: newEventTime || null,
+      user_id: user.id,
+      is_deity_created: profile?.role === "deity",
+    });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo crear el evento: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Evento creado",
+        description: `${newEventTitle} ha sido marcado.`,
+      });
+      setNewEventTitle("");
+      setNewEventTime("");
+      setShowEventForm(false);
       loadEvents();
     }
   };
