@@ -359,7 +359,6 @@ export default function JerarquiaPage() {
         memberId={selectedMemberId}
         isOpen={isSheetOpen}
         onClose={closeMemberSheet}
-        viewerRole={profile?.role || null}
       />
     </>
   );
