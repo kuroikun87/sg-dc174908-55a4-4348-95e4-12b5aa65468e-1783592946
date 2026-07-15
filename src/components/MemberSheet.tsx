@@ -129,7 +129,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     title: "",
     date: "",
     time: "",
-    notes: "",
   });
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -443,7 +442,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             title: eventForm.title,
             event_date: eventForm.date,
             event_time: eventForm.time || null,
-            notes: eventForm.notes || null,
           })
           .eq("id", editingEvent.id);
 
@@ -454,9 +452,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         const { error } = await supabase.from("calendar_events").insert({
           user_id: memberId,
           title: eventForm.title,
+          event_type: "event",
           event_date: eventForm.date,
           event_time: eventForm.time || null,
-          notes: eventForm.notes || null,
           created_by: user?.id,
         });
 
@@ -466,7 +464,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       setShowEventForm(false);
       setEditingEvent(null);
-      setEventForm({ title: "", date: "", time: "", notes: "" });
+      setEventForm({ title: "", date: "", time: "" });
       loadMemberData();
     } catch (error) {
       console.error("Error saving event:", error);
@@ -786,12 +784,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                 value={eventForm.time}
                                 onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
                               />
-                              <Textarea
-                                placeholder="Notas (opcional)"
-                                value={eventForm.notes}
-                                onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
-                                rows={2}
-                              />
                               <div className="flex gap-2">
                                 <RitualButton
                                   variant="gold"
@@ -806,7 +798,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                   onClick={() => {
                                     setShowEventForm(false);
                                     setEditingEvent(null);
-                                    setEventForm({ title: "", date: "", time: "", notes: "" });
+                                    setEventForm({ title: "", date: "", time: "" });
                                   }}
                                 >
                                   Cancelar
@@ -849,11 +841,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                             {event.event_time}
                                           </p>
                                         )}
-                                        {event.notes && (
-                                          <p className="text-[10px] text-muted-foreground mt-1">
-                                            {event.notes}
-                                          </p>
-                                        )}
                                       </div>
                                       {isDeityEvent && (
                                         <div className="flex gap-0.5">
@@ -865,7 +852,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                                 title: event.title,
                                                 date: event.event_date,
                                                 time: event.event_time || "",
-                                                notes: event.notes || "",
                                               });
                                               setShowEventForm(true);
                                             }}
