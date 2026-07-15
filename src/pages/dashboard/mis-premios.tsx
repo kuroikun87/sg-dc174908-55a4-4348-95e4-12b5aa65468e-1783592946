@@ -91,6 +91,24 @@ export default function MisPremiosPage() {
     }
   };
 
+  const loadAllRewards = async () => {
+    if (!profile?.cult_id) return;
+
+    try {
+      // Cargar TODOS los premios del culto para la tienda
+      const { data, error } = await supabase
+        .from("rewards")
+        .select("*")
+        .eq("cult_id", profile.cult_id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setAvailableRewards(data || []);
+    } catch (error) {
+      console.error("Error loading all rewards:", error);
+    }
+  };
+
   const buyReward = async (rewardId: string, cost: number) => {
     if (!user || !profile?.cult_id) return;
 

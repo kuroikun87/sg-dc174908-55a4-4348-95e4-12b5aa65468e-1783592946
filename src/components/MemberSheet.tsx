@@ -38,6 +38,8 @@ import {
   Clock,
   Plus,
   CheckSquare,
+  Trash2,
+  Separator,
 } from "lucide-react";
 
 interface MemberSheetProps {
@@ -85,20 +87,24 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [showRewardAssign, setShowRewardAssign] = useState(false);
   const [showConsequenceAssign, setShowConsequenceAssign] = useState(false);
 
-  // Formularios personalizados
+  const [assignMode, setAssignMode] = useState<"library" | "custom">("library");
+  const [rewardAssignMode, setRewardAssignMode] = useState<"library" | "custom">("library");
+  const [punishmentAssignMode, setPunishmentAssignMode] = useState<"library" | "custom">("library");
+  
   const [customTaskForm, setCustomTaskForm] = useState({
     title: "",
     description: "",
     faith_points: 0,
     requires_evidence: false,
   });
+
   const [customRewardForm, setCustomRewardForm] = useState({
-    title: "",
+    name: "",
     description: "",
-    faith_points: 0,
   });
-  const [customConsequenceForm, setCustomConsequenceForm] = useState({
-    title: "",
+
+  const [customPunishmentForm, setCustomPunishmentForm] = useState({
+    name: "",
     description: "",
     faith_points: 0,
   });
@@ -240,17 +246,19 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
   // Asignar tarea personalizada
   const assignCustomTask = async () => {
-    if (!member?.cult_id || !memberId || !customTaskForm.title.trim()) return;
+    if (!memberId || !profile?.cult_id || !customTaskForm.title.trim()) return;
 
     try {
       const { error } = await supabase.from("follower_tasks").insert({
         follower_id: memberId,
-        cult_id: member.cult_id,
-        title: customTaskForm.title,
-        description: customTaskForm.description || null,
-        faith_points: customTaskForm.faith_points,
+        cult_id: profile.cult_id,
+        task_id: null,
+        task_title: customTaskForm.title,
+        task_description: customTaskForm.description || null,
+        faith_points_reward: customTaskForm.faith_points,
         requires_evidence: customTaskForm.requires_evidence,
-        is_completed: false,
+        is_custom: true,
+        assigned_by: user?.id,
       });
 
       if (error) throw error;
@@ -263,7 +271,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       console.error("Error assigning custom task:", error);
       toast({
         title: "Error",
-        description: "No se pudo asignar la tarea",
+        description: "No se pudo asignar la tarea personalizada",
         variant: "destructive",
       });
     }
@@ -303,29 +311,30 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
   // Asignar premio personalizado
   const assignCustomReward = async () => {
-    if (!member?.cult_id || !memberId || !customRewardForm.title.trim()) return;
+    if (!memberId || !profile?.cult_id || !customRewardForm.name.trim()) return;
 
     try {
       const { error } = await supabase.from("follower_rewards").insert({
         follower_id: memberId,
-        cult_id: member.cult_id,
-        title: customRewardForm.title,
-        description: customRewardForm.description || null,
-        faith_points: customRewardForm.faith_points,
-        is_used: false,
+        cult_id: profile.cult_id,
+        reward_id: null,
+        reward_name: customRewardForm.name,
+        reward_description: customRewardForm.description || null,
+        is_custom: true,
+        given_by: user?.id,
       });
 
       if (error) throw error;
 
-      toast({ title: "Premio personalizado otorgado" });
+      toast({ title: "Premio personalizado asignado" });
       setShowRewardAssign(false);
-      setCustomRewardForm({ title: "", description: "", faith_points: 0 });
+      setCustomRewardForm({ name: "", description: "" });
       loadMemberData();
     } catch (error) {
       console.error("Error assigning custom reward:", error);
       toast({
         title: "Error",
-        description: "No se pudo otorgar el premio",
+        description: "No se pudo asignar el premio personalizado",
         variant: "destructive",
       });
     }
@@ -388,6 +397,119 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       toast({
         title: "Error",
         description: "No se pudo asignar la consecuencia",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const assignTaskFromLibrary = async (task: Task) => {
+    if (!memberId || !profile?.cult_id) return;
+
+    try {
+      const { error } = await supabase.from("follower_tasks").insert({
+        follower_id: memberId,
+        cult_id: profile.cult_id,
+        task_id: task.id,
+        task_title: task.title,
+        task_description: task.description,
+        faith_points_reward: task.faith_points_reward,
+        requires_evidence: task.requires_evidence,
+        is_custom: false,
+        assigned_by: user?.id,
+      });
+
+      if (error) throw error;
+      toast({ title: "Tarea asignada" });
+      loadFollowerData();
+    } catch (error) {
+      console.error("Error assigning task:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar la tarea",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const assignRewardFromLibrary = async (reward: Reward) => {
+    if (!memberId || !profile?.cult_id) return;
+
+    try {
+      const { error } = await supabase.from("follower_rewards").insert({
+        follower_id: memberId,
+        cult_id: profile.cult_id,
+        reward_id: reward.id,
+        reward_name: reward.name,
+        reward_description: reward.description,
+        is_custom: false,
+        given_by: user?.id,
+      });
+
+      if (error) throw error;
+      toast({ title: "Premio asignado" });
+      loadFollowerData();
+    } catch (error) {
+      console.error("Error assigning reward:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar el premio",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const assignPunishmentFromLibrary = async (punishment: Punishment) => {
+    if (!memberId || !profile?.cult_id) return;
+
+    try {
+      const { error } = await supabase.from("follower_punishments").insert({
+        follower_id: memberId,
+        cult_id: profile.cult_id,
+        punishment_id: punishment.id,
+        punishment_name: punishment.name,
+        punishment_description: punishment.description,
+        faith_points_cost: punishment.faith_points_cost,
+        is_custom: false,
+        assigned_by: user?.id,
+      });
+
+      if (error) throw error;
+      toast({ title: "Consecuencia asignada" });
+      loadFollowerData();
+    } catch (error) {
+      console.error("Error assigning punishment:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar la consecuencia",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const assignCustomPunishment = async () => {
+    if (!memberId || !profile?.cult_id || !customPunishmentForm.name.trim()) return;
+
+    try {
+      const { error } = await supabase.from("follower_punishments").insert({
+        follower_id: memberId,
+        cult_id: profile.cult_id,
+        punishment_id: null,
+        punishment_name: customPunishmentForm.name,
+        punishment_description: customPunishmentForm.description || null,
+        faith_points_cost: customPunishmentForm.faith_points,
+        is_custom: true,
+        assigned_by: user?.id,
+      });
+
+      if (error) throw error;
+      toast({ title: "Consecuencia personalizada asignada" });
+      setCustomPunishmentForm({ name: "", description: "", faith_points: 0 });
+      loadFollowerData();
+    } catch (error) {
+      console.error("Error assigning custom punishment:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar la consecuencia personalizada",
         variant: "destructive",
       });
     }
