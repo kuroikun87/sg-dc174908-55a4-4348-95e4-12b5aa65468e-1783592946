@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Crown, Heart, ChevronDown, Loader2 } from "lucide-react";
-import { BookPage } from "@/components/layout/BookPage";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { BookPage } from "@/components/layout/BookPage";
+import { ParchmentCard } from "@/components/ui/parchment-card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MemberSheet } from "@/components/MemberSheet";
+import { Users, Crown, Heart, Loader2, ChevronDown } from "lucide-react";
 
 interface HierarchyPerson {
   id: string;
@@ -24,6 +27,10 @@ export default function JerarquiaPage() {
   const [deities, setDeities] = useState<HierarchyPerson[]>([]);
   const [followers, setFollowers] = useState<HierarchyPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedMember, setSelectedMember] = useState<HierarchyPerson | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   useEffect(() => {
     fetchHierarchy();
@@ -120,6 +127,40 @@ export default function JerarquiaPage() {
     }
   };
 
+  const loadMembers = async () => {
+    if (!profile?.cult_id) {
+      setIsLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*, ranks(name, level)")
+      .eq("cult_id", profile.cult_id)
+      .order("role", { ascending: false });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudo cargar la jerarquía: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      setMembers(data || []);
+    }
+    setIsLoading(false);
+  };
+
+  const openMemberSheet = (memberId: string) => {
+    setSelectedMemberId(memberId);
+    setIsSheetOpen(true);
+  };
+
+  const closeMemberSheet = () => {
+    setIsSheetOpen(false);
+    setSelectedMemberId(null);
+  };
+
   function HierarchyNode({ person, isMain = false, isDeity = false }: { person: HierarchyPerson; isMain?: boolean; isDeity?: boolean }) {
     return (
       <motion.div
@@ -163,7 +204,7 @@ export default function JerarquiaPage() {
 
   if (isLoading) {
     return (
-      <AppLayout title="Jerarquía" icon={<Crown className="w-5 h-5" />}>
+      <AppLayout title="Jerarquía" icon={<Users className="w-5 h-5" />}>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-gold animate-spin" />
         </div>
@@ -171,86 +212,184 @@ export default function JerarquiaPage() {
     );
   }
 
+  const deities = members.filter((m) => m.role === "deity");
+  const followers = members.filter((m) => m.role === "follower");
+
   return (
-    <AppLayout title="Jerarquía" icon={<Crown className="w-5 h-5" />}>
-      <BookPage pageKey="jerarquia">
-        <div className="space-y-8">
-          <div className="text-center space-y-2">
-            <h1 className="font-display text-3xl text-foreground">La Pirámide Sagrada</h1>
-            <p className="font-body text-muted-foreground">Estructura de poder del culto</p>
-          </div>
+    <>
+      <AppLayout title="Jerarquía" icon={<Users className="w-5 h-5" />}>
+        <BookPage pageKey="jerarquia">
+          <div className="space-y-8">
+            <div className="text-center space-y-2">
+              <h1 className="font-display text-3xl text-foreground">La Pirámide Sagrada</h1>
+              <p className="font-body text-muted-foreground">Estructura de poder del culto</p>
+            </div>
 
-          {/* Pirámide visual */}
-          <div className="flex flex-col items-center space-y-6">
-            {/* Nivel 0: Deidad Principal */}
-            {mainDeity && (
-              <div className="relative">
-                <HierarchyNode person={mainDeity} isMain />
-                <motion.div
-                  animate={{ y: [0, 5, 0] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                  className="absolute -bottom-6 left-1/2 -translate-x-1/2"
-                >
-                  <ChevronDown className="w-4 h-4 text-gold/40" />
-                </motion.div>
-              </div>
-            )}
+            {/* Pirámide visual */}
+            <div className="flex flex-col items-center space-y-6">
+              {/* Nivel 0: Deidad Principal */}
+              {mainDeity && (
+                <div className="relative">
+                  <HierarchyNode person={mainDeity} isMain />
+                  <motion.div
+                    animate={{ y: [0, 5, 0] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="absolute -bottom-6 left-1/2 -translate-x-1/2"
+                  >
+                    <ChevronDown className="w-4 h-4 text-gold/40" />
+                  </motion.div>
+                </div>
+              )}
 
-            {/* Nivel 1: Deidades menores */}
-            {deities.length > 0 && (
-              <>
-                <div className="flex gap-6 items-start flex-wrap justify-center">
-                  {deities.map((deity) => (
-                    <div key={deity.id} className="relative">
-                      <HierarchyNode person={deity} isDeity />
-                      <div className="absolute -top-6 left-1/2 w-px h-6 bg-border/40 -translate-x-1/2" />
-                    </div>
+              {/* Nivel 1: Deidades menores */}
+              {deities.length > 0 && (
+                <>
+                  <div className="flex gap-6 items-start flex-wrap justify-center">
+                    {deities.map((deity) => (
+                      <div key={deity.id} className="relative">
+                        <HierarchyNode person={deity} isDeity />
+                        <div className="absolute -top-6 left-1/2 w-px h-6 bg-border/40 -translate-x-1/2" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="w-px h-4 bg-border/30" />
+                </>
+              )}
+
+              {/* Nivel 2-3: Fieles */}
+              {followers.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {followers.map((follower, i) => (
+                    <motion.div
+                      key={follower.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                    >
+                      <HierarchyNode person={follower} />
+                    </motion.div>
                   ))}
                 </div>
-                <div className="w-px h-4 bg-border/30" />
-              </>
-            )}
+              )}
 
-            {/* Nivel 2-3: Fieles */}
-            {followers.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {followers.map((follower, i) => (
-                  <motion.div
-                    key={follower.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                  >
-                    <HierarchyNode person={follower} />
-                  </motion.div>
-                ))}
+              {followers.length === 0 && deities.length === 0 && !mainDeity && (
+                <p className="font-body text-muted-foreground text-center py-10">
+                  No hay miembros en el culto todavía.
+                </p>
+              )}
+            </div>
+
+            {/* Lista de miembros */}
+            <ParchmentCard title="Miembros del Culto" icon={<Users className="w-4 h-4" />}>
+              <div className="space-y-4">
+                {/* Deidades */}
+                <div className="space-y-2">
+                  <h3 className="font-heading text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                    <Crown className="w-3 h-3 text-wine" />
+                    Deidades
+                  </h3>
+                  <div className="space-y-2">
+                    {deities.length === 0 ? (
+                      <p className="font-body text-sm text-muted-foreground/70 pl-4">
+                        No hay deidades registradas
+                      </p>
+                    ) : (
+                      deities.map((member, i) => (
+                        <motion.button
+                          key={member.id}
+                          onClick={() => openMemberSheet(member.id)}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                          className="w-full flex items-center gap-3 p-3 bg-background/50 rounded-sm border border-wine/30 
+                                   hover:border-wine/60 hover:bg-wine/5 transition-all cursor-pointer text-left"
+                        >
+                          <Avatar className="w-12 h-12 border-2 border-wine/30">
+                            <AvatarImage src={member.avatar_url || undefined} />
+                            <AvatarFallback className="bg-muted text-foreground font-display">
+                              {member.display_name?.[0] || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-heading text-sm text-foreground truncate">
+                                {member.display_name || "Sin nombre"}
+                              </p>
+                              {member.is_main_deity && (
+                                <Crown className="w-4 h-4 text-wine flex-shrink-0" />
+                              )}
+                            </div>
+                            <p className="font-body text-xs text-gold truncate">
+                              {member.title || "Sin título"}
+                            </p>
+                          </div>
+                        </motion.button>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Fieles */}
+                <div className="space-y-2">
+                  <h3 className="font-heading text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                    <Heart className="w-3 h-3 text-gold" />
+                    Fieles
+                  </h3>
+                  <div className="space-y-2">
+                    {followers.length === 0 ? (
+                      <p className="font-body text-sm text-muted-foreground/70 pl-4">
+                        No hay fieles registrados
+                      </p>
+                    ) : (
+                      followers.map((member, i) => (
+                        <motion.button
+                          key={member.id}
+                          onClick={() => openMemberSheet(member.id)}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: (deities.length + i) * 0.05 }}
+                          className="w-full flex items-center gap-3 p-3 bg-background/50 rounded-sm border border-border/30 
+                                   hover:border-gold/60 hover:bg-gold/5 transition-all cursor-pointer text-left"
+                        >
+                          <Avatar className="w-12 h-12 border-2 border-gold/30">
+                            <AvatarImage src={member.avatar_url || undefined} />
+                            <AvatarFallback className="bg-muted text-foreground font-display">
+                              {member.display_name?.[0] || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-heading text-sm text-foreground truncate">
+                              {member.display_name || "Sin nombre"}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-body text-xs text-muted-foreground truncate">
+                                {member.title || "Sin título"}
+                              </p>
+                              {member.ranks && (
+                                <span className="text-xs text-gold">
+                                  · {member.ranks.name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </motion.button>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-
-            {followers.length === 0 && deities.length === 0 && !mainDeity && (
-              <p className="font-body text-muted-foreground text-center py-10">
-                No hay miembros en el culto todavía.
-              </p>
-            )}
+            </ParchmentCard>
           </div>
+        </BookPage>
+      </AppLayout>
 
-          {/* Leyenda */}
-          <div className="flex justify-center gap-6 pt-4 border-t border-border/30">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-wine/40 border border-wine" />
-              <span className="font-body text-xs text-muted-foreground">Deidad Principal</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-gold/40 border border-gold" />
-              <span className="font-body text-xs text-muted-foreground">Deidad</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-muted/60 border border-border" />
-              <span className="font-body text-xs text-muted-foreground">Fiel</span>
-            </div>
-          </div>
-        </div>
-      </BookPage>
-    </AppLayout>
+      {/* Ficha personal */}
+      <MemberSheet
+        memberId={selectedMemberId}
+        isOpen={isSheetOpen}
+        onClose={closeMemberSheet}
+        viewerRole={profile?.role || null}
+      />
+    </>
   );
 }
