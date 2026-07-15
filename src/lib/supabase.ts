@@ -16,12 +16,16 @@ export type UserRole = "deity" | "follower" | null;
 
 export interface UserProfile {
   id: string;
-  email: string;
-  role: UserRole;
-  display_name: string | null;
+  email: string | null;
+  full_name: string | null;
   avatar_url: string | null;
+  role: "deity" | "follower" | null;
+  display_name: string | null;
   title: string | null;
   cult_id: string | null;
-  is_main_deity: boolean;
-  created_at: string;
+  is_main_deity: boolean | null;
+  nickname: string | null;
+  bio: string | null;
+  pronouns: string | null;
+  birth_date: string | null;
 }
