@@ -321,6 +321,8 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          bio: string | null
+          birth_date: string | null
           created_at: string | null
           cult_id: string | null
           display_name: string | null
@@ -328,6 +330,8 @@ export type Database = {
           full_name: string | null
           id: string
           is_main_deity: boolean | null
+          nickname: string | null
+          pronouns: string | null
           rank_id: string | null
           role: string | null
           title: string | null
@@ -335,6 +339,8 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
+          birth_date?: string | null
           created_at?: string | null
           cult_id?: string | null
           display_name?: string | null
@@ -342,6 +348,8 @@ export type Database = {
           full_name?: string | null
           id: string
           is_main_deity?: boolean | null
+          nickname?: string | null
+          pronouns?: string | null
           rank_id?: string | null
           role?: string | null
           title?: string | null
@@ -349,6 +357,8 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
+          birth_date?: string | null
           created_at?: string | null
           cult_id?: string | null
           display_name?: string | null
@@ -356,6 +366,8 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_main_deity?: boolean | null
+          nickname?: string | null
+          pronouns?: string | null
           rank_id?: string | null
           role?: string | null
           title?: string | null

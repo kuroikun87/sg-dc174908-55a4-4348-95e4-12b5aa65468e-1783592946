@@ -1,21 +1,73 @@
-import React, { useState } from "react";
-import { useRouter } from "next/router";
-import { useAuth } from "@/contexts/AuthContext";
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { User, Save, LogOut, Trash2, Loader2, Calendar, UserCircle } from "lucide-react";
+import { BookPage } from "@/components/layout/BookPage";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { RitualButton } from "@/components/ui/ritual-button";
 import { ParchmentCard } from "@/components/ui/parchment-card";
-import { User, Crown, LogOut, AlertTriangle, Trash2 } from "lucide-react";
+import { RitualButton } from "@/components/ui/ritual-button";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/router";
 
-export default function Perfil() {
-  const { profile, user } = useAuth();
-  const router = useRouter();
+export default function PerfilPage() {
+  const { profile, user, signOut } = useAuth();
   const { toast } = useToast();
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Campos editables del perfil
+  const [displayName, setDisplayName] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [bio, setBio] = useState("");
+  const [pronouns, setPronouns] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+
+  useEffect(() => {
+    if (profile) {
+      setDisplayName(profile.display_name || "");
+      setNickname(profile.nickname || "");
+      setBio(profile.bio || "");
+      setPronouns(profile.pronouns || "");
+      setBirthDate(profile.birth_date || "");
+    }
+  }, [profile]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setIsSaving(true);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        display_name: displayName || null,
+        nickname: nickname || null,
+        bio: bio || null,
+        pronouns: pronouns || null,
+        birth_date: birthDate || null,
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: `No se pudieron guardar los cambios: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Perfil actualizado",
+        description: "Tus datos han sido guardados correctamente.",
+      });
+    }
+
+    setIsSaving(false);
+  };
 
   const handleLeaveCult = async () => {
     if (!user) {
@@ -59,44 +111,52 @@ export default function Perfil() {
   };
 
   const handleDeleteAccount = async () => {
-    if (!user) {
-      toast({ title: "Error", description: "No hay sesión activa", variant: "destructive" });
-      return;
-    }
-    setIsDeleting(true);
+    if (!user) return;
     
+    const confirmed = confirm(
+      "⚠️ ADVERTENCIA: Esta acción es permanente e irreversible.\n\n" +
+      "Se eliminarán:\n" +
+      "• Tu cuenta y perfil\n" +
+      "• Todas tus tareas y eventos\n" +
+      "• Tus notas personales\n" +
+      "• Tus ratings de fetiches\n\n" +
+      "¿Estás absolutamente seguro de que deseas continuar?"
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+
     try {
-      // 1. Borrar culto si es deidad principal
-      const { data: myCult } = await supabase
-        .from("cults")
-        .select("id")
-        .eq("main_deity_id", user.id)
-        .maybeSingle();
-      
-      if (myCult?.id) {
-        await supabase.from("cults").delete().eq("id", myCult.id);
-      }
-      
-      // 2. Borrar perfil
-      const { error: deleteProfileError } = await supabase
+      // Primero eliminar el perfil (CASCADE eliminará los datos relacionados)
+      const { error: profileError } = await supabase
         .from("profiles")
         .delete()
         .eq("id", user.id);
-      
-      if (deleteProfileError) {
-        throw new Error(`Error al borrar perfil: ${deleteProfileError.message}`);
+
+      if (profileError) {
+        throw new Error(`Error al eliminar perfil: ${profileError.message}`);
       }
-      
+
+      // Luego eliminar el usuario de auth
+      const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
+
+      if (authError) {
+        throw new Error(`Error al eliminar cuenta: ${authError.message}`);
+      }
+
       toast({
         title: "Cuenta eliminada",
-        description: "Todos tus datos han sido borrados.",
+        description: "Tu cuenta ha sido borrada permanentemente.",
       });
-      
-      // 3. Cerrar sesión
-      await supabase.auth.signOut();
+
       window.localStorage.clear();
-      window.location.href = "/";
+      window.sessionStorage.clear();
       
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
+
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";
       toast({
@@ -108,105 +168,200 @@ export default function Perfil() {
     }
   };
 
+  if (!profile) {
+    return (
+      <AppLayout title="Perfil" icon={<User className="w-5 h-5" />}>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-gold animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const isDeity = profile.role === "deity";
+
   return (
-    <AppLayout title="Mi Perfil" icon={<User className="w-5 h-5" />}>
-      <div className="space-y-6">
-        <ParchmentCard title="Datos del Culto" icon={<Crown className="w-5 h-5" />}>
-          <div className="space-y-2">
-            <p className="font-body text-foreground">
-              <span className="text-muted-foreground">Nombre:</span> {profile?.display_name || "Sin nombre"}
-            </p>
-            <p className="font-body text-foreground">
-              <span className="text-muted-foreground">Rol:</span> {profile?.role === "deity" ? "Deidad" : "Fiel"}
-            </p>
-            <p className="font-body text-foreground">
-              <span className="text-muted-foreground">Título:</span> {profile?.title || "Sin título"}
+    <AppLayout title="Perfil" icon={<User className="w-5 h-5" />}>
+      <BookPage pageKey="perfil">
+        <div className="space-y-6">
+          <div className="text-center space-y-2">
+            <h1 className="font-display text-3xl text-foreground">Mi Perfil</h1>
+            <p className="font-body text-muted-foreground">
+              {isDeity ? "Información de la deidad" : "Información personal"}
             </p>
           </div>
-        </ParchmentCard>
 
-        <div className="border-t border-border/50 pt-6 space-y-4">
-          <h3 className="font-heading text-sm text-muted-foreground tracking-wider uppercase">
-            Zona de Peligro
-          </h3>
+          {/* Información del perfil */}
+          <ParchmentCard title="Datos Personales" icon={<UserCircle className="w-4 h-4" />}>
+            <form onSubmit={handleSave} className="space-y-4">
+              {/* Nombre completo */}
+              <div>
+                <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Tu nombre..."
+                  className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                />
+              </div>
 
-          {!showLeaveConfirm ? (
-            <RitualButton
-              variant="outline"
-              className="w-full border-wine/50 text-wine hover:bg-wine/10"
-              onClick={() => setShowLeaveConfirm(true)}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Abandonar Culto
-            </RitualButton>
-          ) : (
-            <div className="p-4 bg-wine/10 border border-wine/30 rounded-sm space-y-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 text-wine flex-shrink-0" />
-                <p className="font-body text-sm text-foreground">
-                  ¿Abandonar el culto? Podrás crear uno nuevo o unirte con un código.
-                </p>
+              {/* Apodo */}
+              <div>
+                <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Apodo (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="Cómo te llaman..."
+                  className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                />
               </div>
-              <div className="flex gap-2">
-                <RitualButton
-                  variant="wine"
-                  className="flex-1"
-                  onClick={handleLeaveCult}
-                  disabled={isLeaving}
-                >
-                  {isLeaving ? "Saliendo..." : "Sí, abandonar"}
-                </RitualButton>
-                <RitualButton
-                  variant="ghost"
-                  className="flex-1"
-                  onClick={() => setShowLeaveConfirm(false)}
-                  disabled={isLeaving}
-                >
-                  Cancelar
-                </RitualButton>
+
+              {/* Descripción */}
+              <div>
+                <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Descripción (opcional)
+                </label>
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Preséntate brevemente..."
+                  rows={3}
+                  className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                             text-foreground font-body focus:outline-none focus:border-gold/50 resize-none"
+                />
               </div>
+
+              {/* Pronombres */}
+              <div>
+                <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Pronombres (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={pronouns}
+                  onChange={(e) => setPronouns(e.target.value)}
+                  placeholder="Ej: Él/Ella/Elle"
+                  className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                />
+              </div>
+
+              {/* Fecha de nacimiento */}
+              <div>
+                <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Fecha de nacimiento (opcional)
+                </label>
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                />
+              </div>
+
+              {/* Botón guardar */}
+              <RitualButton 
+                type="submit" 
+                variant="gold" 
+                className="w-full"
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Guardar Cambios
+                  </>
+                )}
+              </RitualButton>
+            </form>
+          </ParchmentCard>
+
+          {/* Información del rol */}
+          <ParchmentCard title="Información del Culto" icon={<User className="w-4 h-4" />}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between py-2 border-b border-border/30">
+                <span className="font-heading text-xs text-muted-foreground uppercase tracking-wider">Rol</span>
+                <span className="font-body text-sm text-foreground">
+                  {isDeity ? (
+                    profile.is_main_deity ? "Deidad Principal" : "Deidad"
+                  ) : (
+                    "Fiel"
+                  )}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-border/30">
+                <span className="font-heading text-xs text-muted-foreground uppercase tracking-wider">Email</span>
+                <span className="font-body text-sm text-foreground">{user?.email}</span>
+              </div>
+
+              {profile.title && (
+                <div className="flex items-center justify-between py-2 border-b border-border/30">
+                  <span className="font-heading text-xs text-muted-foreground uppercase tracking-wider">Título</span>
+                  <span className="font-body text-sm text-gold">{profile.title}</span>
+                </div>
+              )}
             </div>
-          )}
+          </ParchmentCard>
 
-          {!showDeleteConfirm ? (
-            <RitualButton
-              variant="outline"
-              className="w-full border-wine/50 text-wine hover:bg-wine/10"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Borrar cuenta completamente
-            </RitualButton>
-          ) : (
-            <div className="p-4 bg-wine/10 border border-wine/30 rounded-sm space-y-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 text-wine flex-shrink-0" />
-                <p className="font-body text-sm text-foreground">
-                  ¿Eliminar tu cuenta PERMANENTEMENTE? Se borrarán todos tus datos, incluyendo el culto si eres deidad principal. Esta acción no se puede deshacer.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <RitualButton
-                  variant="wine"
-                  className="flex-1"
-                  onClick={handleDeleteAccount}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "Borrando..." : "Sí, eliminar todo"}
-                </RitualButton>
-                <RitualButton
-                  variant="ghost"
-                  className="flex-1"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={isDeleting}
-                >
-                  Cancelar
-                </RitualButton>
-              </div>
+          {/* Acciones peligrosas */}
+          <ParchmentCard title="Acciones" icon={<LogOut className="w-4 h-4" />}>
+            <div className="space-y-3">
+              <RitualButton
+                variant="outline"
+                onClick={handleLeaveCult}
+                disabled={isLeaving}
+                className="w-full text-wine hover:bg-wine/10"
+              >
+                {isLeaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Abandonando...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Abandonar Culto
+                  </>
+                )}
+              </RitualButton>
+
+              <RitualButton
+                variant="outline"
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="w-full text-red-500 hover:bg-red-500/10"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Borrar Cuenta Completamente
+                  </>
+                )}
+              </RitualButton>
             </div>
-          )}
+          </ParchmentCard>
         </div>
-      </div>
+      </BookPage>
     </AppLayout>
   );
 }
