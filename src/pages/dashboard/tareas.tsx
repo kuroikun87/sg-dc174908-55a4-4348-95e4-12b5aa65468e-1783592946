@@ -184,15 +184,18 @@ export default function TareasPage() {
                             className="hidden"
                             disabled={uploading === task.id}
                           />
-                          <RitualButton
-                            variant="outline"
-                            className="w-full"
-                            disabled={uploading === task.id}
-                            as="div"
+                          <div
+                            className={`
+                              w-full flex items-center justify-center gap-2 px-4 py-2.5
+                              bg-background/80 border border-border/40 rounded-sm
+                              font-heading text-sm tracking-wide uppercase
+                              transition-all duration-200
+                              ${uploading === task.id ? 'opacity-50 cursor-not-allowed' : 'hover:border-gold/60 hover:bg-background'}
+                            `}
                           >
                             <Upload className="w-4 h-4 mr-2" />
                             {uploading === task.id ? "Subiendo..." : "Subir Evidencia"}
-                          </RitualButton>
+                          </div>
                         </label>
                         <p className="text-xs text-muted-foreground text-center">
                           Esta tarea requiere evidencia fotográfica
