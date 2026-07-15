@@ -18,18 +18,17 @@ import { Gift, Loader2, ShoppingBag, Sparkles, Check } from "lucide-react";
 
 interface Reward {
   id: string;
-  title: string;
-  description: string | null;
-  faith_points: number;
+  reward_name: string;
+  reward_description: string | null;
   is_used: boolean;
   used_at: string | null;
 }
 
 interface RewardTemplate {
   id: string;
-  title: string;
+  name: string;
   description: string | null;
-  faith_points: number;
+  faith_points_cost: number;
 }
 
 export default function MisPremiosPage() {
@@ -65,7 +64,7 @@ export default function MisPremiosPage() {
         .from("rewards")
         .select("*")
         .eq("cult_id", profile.cult_id)
-        .order("faith_points", { ascending: true });
+        .order("faith_points_cost", { ascending: true });
 
       if (templatesError) throw templatesError;
       setAvailableRewards(templatesData || []);
@@ -129,10 +128,12 @@ export default function MisPremiosPage() {
       const { error: insertError } = await supabase.from("follower_rewards").insert({
         follower_id: user.id,
         cult_id: profile.cult_id,
-        title: reward.title,
-        description: reward.description,
-        faith_points: reward.faith_points,
+        reward_id: reward.id,
+        reward_name: reward.name,
+        reward_description: reward.description,
         is_used: false,
+        given_by: null,
+        is_custom: false,
       });
 
       if (insertError) throw insertError;
@@ -233,19 +234,14 @@ export default function MisPremiosPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <h3 className="font-heading text-base text-foreground mb-1">
-                          {reward.title}
+                          {reward.reward_name}
                         </h3>
-                        {reward.description && (
+                        {reward.reward_description && (
                           <p className="font-body text-sm text-muted-foreground">
-                            {reward.description}
+                            {reward.reward_description}
                           </p>
                         )}
                       </div>
-                      {reward.faith_points > 0 && (
-                        <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
-                          {reward.faith_points} PF
-                        </Badge>
-                      )}
                     </div>
 
                     <RitualButton
@@ -274,7 +270,7 @@ export default function MisPremiosPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <h3 className="font-heading text-sm text-foreground line-through">
-                          {reward.title}
+                          {reward.reward_name}
                         </h3>
                         {reward.used_at && (
                           <p className="text-xs text-muted-foreground mt-1">
@@ -282,11 +278,6 @@ export default function MisPremiosPage() {
                           </p>
                         )}
                       </div>
-                      {reward.faith_points > 0 && (
-                        <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
-                          {reward.faith_points} PF
-                        </Badge>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -326,7 +317,7 @@ export default function MisPremiosPage() {
               </p>
             ) : (
               availableRewards.map((reward) => {
-                const canAfford = myFaithPoints >= reward.faith_points;
+                const canAfford = myFaithPoints >= reward.faith_points_cost;
                 return (
                   <div
                     key={reward.id}
@@ -342,7 +333,7 @@ export default function MisPremiosPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <h3 className="font-heading text-base text-foreground mb-1">
-                          {reward.title}
+                          {reward.name}
                         </h3>
                         {reward.description && (
                           <p className="font-body text-sm text-muted-foreground">
@@ -360,13 +351,13 @@ export default function MisPremiosPage() {
                           }
                         `}
                       >
-                        {reward.faith_points} PF
+                        {reward.faith_points_cost} PF
                       </Badge>
                     </div>
 
                     <RitualButton
                       variant={canAfford ? "gold" : "outline"}
-                      onClick={() => buyReward(reward.id, reward.faith_points)}
+                      onClick={() => buyReward(reward.id, reward.faith_points_cost)}
                       disabled={!canAfford}
                       className="w-full"
                     >

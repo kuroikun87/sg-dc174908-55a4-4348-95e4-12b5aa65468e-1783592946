@@ -17,28 +17,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
   User,
   Sparkles,
   Heart,
   Calendar,
-  Gift,
-  AlertTriangle,
-  Settings,
   Crown,
   Loader2,
   Star,
-  Circle,
-  CheckCircle2,
-  Clock,
   Plus,
-  CheckSquare,
   Trash2,
 } from "lucide-react";
 
@@ -228,199 +214,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     setIsLoading(false);
   };
 
-  const loadFollowerData = loadMemberData;
-
-  // Asignar tarea desde template
-  const assignTaskFromTemplate = async (templateId: string) => {
-    if (!member?.cult_id || !memberId) return;
-
-    const template = libraryTasks.find((t) => t.id === templateId);
-    if (!template) return;
-
-    try {
-      const { error } = await supabase.from("follower_tasks").insert({
-        follower_id: memberId,
-        cult_id: member.cult_id,
-        title: template.title,
-        description: template.description,
-        faith_points: template.faith_points_reward,
-        requires_evidence: template.requires_evidence,
-        is_completed: false,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Tarea asignada" });
-      setShowTaskAssign(false);
-      loadMemberData();
-    } catch (error) {
-      console.error("Error assigning task:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo asignar la tarea",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Asignar tarea personalizada
-  const assignCustomTask = async () => {
-    if (!memberId || !profile?.cult_id || !customTaskForm.title.trim()) return;
-
-    try {
-      const { error } = await supabase.from("follower_tasks").insert({
-        follower_id: memberId,
-        cult_id: profile.cult_id,
-        task_id: null,
-        task_title: customTaskForm.title,
-        task_description: customTaskForm.description || null,
-        faith_points_reward: customTaskForm.faith_points,
-        requires_evidence: customTaskForm.requires_evidence,
-        is_custom: true,
-        assigned_by: user?.id,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Tarea personalizada asignada" });
-      setShowTaskAssign(false);
-      setCustomTaskForm({ title: "", description: "", faith_points: 0, requires_evidence: false });
-      loadMemberData();
-    } catch (error) {
-      console.error("Error assigning custom task:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo asignar la tarea personalizada",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Asignar premio desde template
-  const assignRewardFromTemplate = async (templateId: string) => {
-    if (!member?.cult_id || !memberId) return;
-
-    const template = libraryRewards.find((t) => t.id === templateId);
-    if (!template) return;
-
-    try {
-      const { error } = await supabase.from("follower_rewards").insert({
-        follower_id: memberId,
-        cult_id: member.cult_id,
-        title: template.name,
-        description: template.description,
-        faith_points: template.faith_points_cost,
-        is_used: false,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Premio otorgado" });
-      setShowRewardAssign(false);
-      loadMemberData();
-    } catch (error) {
-      console.error("Error assigning reward:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo otorgar el premio",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Asignar premio personalizado
-  const assignCustomReward = async () => {
-    if (!memberId || !profile?.cult_id || !customRewardForm.name.trim()) return;
-
-    try {
-      const { error } = await supabase.from("follower_rewards").insert({
-        follower_id: memberId,
-        cult_id: profile.cult_id,
-        reward_id: null,
-        reward_name: customRewardForm.name,
-        reward_description: customRewardForm.description || null,
-        is_custom: true,
-        given_by: user?.id,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Premio personalizado asignado" });
-      setShowRewardAssign(false);
-      setCustomRewardForm({ name: "", description: "" });
-      loadMemberData();
-    } catch (error) {
-      console.error("Error assigning custom reward:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo asignar el premio personalizado",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Asignar consecuencia desde template
-  const assignConsequenceFromTemplate = async (templateId: string) => {
-    if (!member?.cult_id || !memberId) return;
-
-    const template = libraryPunishments.find((t) => t.id === templateId);
-    if (!template) return;
-
-    try {
-      const { error } = await supabase.from("follower_consequences").insert({
-        follower_id: memberId,
-        cult_id: member.cult_id,
-        title: template.name,
-        description: template.description,
-        faith_points: template.faith_points_cost,
-        is_fulfilled: false,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Consecuencia asignada" });
-      setShowConsequenceAssign(false);
-      loadMemberData();
-    } catch (error) {
-      console.error("Error assigning consequence:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo asignar la consecuencia",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Asignar consecuencia personalizada
-  const assignCustomConsequence = async () => {
-    if (!member?.cult_id || !memberId || !customConsequenceForm.title.trim()) return;
-
-    try {
-      const { error } = await supabase.from("follower_consequences").insert({
-        follower_id: memberId,
-        cult_id: member.cult_id,
-        title: customConsequenceForm.title,
-        description: customConsequenceForm.description || null,
-        faith_points: customConsequenceForm.faith_points,
-        is_fulfilled: false,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Consecuencia personalizada asignada" });
-      setShowConsequenceAssign(false);
-      setCustomConsequenceForm({ title: "", description: "", faith_points: 0 });
-      loadMemberData();
-    } catch (error) {
-      console.error("Error assigning custom consequence:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo asignar la consecuencia",
-        variant: "destructive",
-      });
-    }
-  };
-
   const assignTaskFromLibrary = async (task: Task) => {
     if (!memberId || !profile?.cult_id) return;
 
@@ -439,12 +232,42 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       if (error) throw error;
       toast({ title: "Tarea asignada" });
-      loadFollowerData();
+      loadMemberData();
     } catch (error) {
       console.error("Error assigning task:", error);
       toast({
         title: "Error",
         description: "No se pudo asignar la tarea",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const assignCustomTask = async () => {
+    if (!memberId || !profile?.cult_id || !customTaskForm.title.trim()) return;
+
+    try {
+      const { error } = await supabase.from("follower_tasks").insert({
+        follower_id: memberId,
+        cult_id: profile.cult_id,
+        task_id: null,
+        task_title: customTaskForm.title,
+        task_description: customTaskForm.description || null,
+        faith_points_reward: customTaskForm.faith_points,
+        requires_evidence: customTaskForm.requires_evidence,
+        is_custom: true,
+        assigned_by: user?.id,
+      });
+
+      if (error) throw error;
+      toast({ title: "Tarea personalizada asignada" });
+      setCustomTaskForm({ title: "", description: "", faith_points: 0, requires_evidence: false });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error assigning custom task:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar la tarea personalizada",
         variant: "destructive",
       });
     }
@@ -466,12 +289,40 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       if (error) throw error;
       toast({ title: "Premio asignado" });
-      loadFollowerData();
+      loadMemberData();
     } catch (error) {
       console.error("Error assigning reward:", error);
       toast({
         title: "Error",
         description: "No se pudo asignar el premio",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const assignCustomReward = async () => {
+    if (!memberId || !profile?.cult_id || !customRewardForm.name.trim()) return;
+
+    try {
+      const { error } = await supabase.from("follower_rewards").insert({
+        follower_id: memberId,
+        cult_id: profile.cult_id,
+        reward_id: null,
+        reward_name: customRewardForm.name,
+        reward_description: customRewardForm.description || null,
+        is_custom: true,
+        given_by: user?.id,
+      });
+
+      if (error) throw error;
+      toast({ title: "Premio personalizado asignado" });
+      setCustomRewardForm({ name: "", description: "" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error assigning custom reward:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar el premio personalizado",
         variant: "destructive",
       });
     }
@@ -494,7 +345,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       if (error) throw error;
       toast({ title: "Consecuencia asignada" });
-      loadFollowerData();
+      loadMemberData();
     } catch (error) {
       console.error("Error assigning punishment:", error);
       toast({
@@ -523,7 +374,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       if (error) throw error;
       toast({ title: "Consecuencia personalizada asignada" });
       setCustomPunishmentForm({ name: "", description: "", faith_points: 0 });
-      loadFollowerData();
+      loadMemberData();
     } catch (error) {
       console.error("Error assigning custom punishment:", error);
       toast({
@@ -605,34 +456,15 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
               </div>
             </SheetHeader>
 
-            <Tabs defaultValue="perfil" className="mt-6">
-              <TabsList className={`grid ${isDeity ? 'grid-cols-5' : 'grid-cols-4'} gap-1 bg-muted/30 p-1`}>
-                <TabsTrigger value="perfil" className="text-xs">
-                  <User className="w-3 h-3 mr-1" />
-                  Perfil
-                </TabsTrigger>
-                <TabsTrigger value="actividad" className="text-xs">
-                  <Settings className="w-3 h-3 mr-1" />
-                  Actividad
-                </TabsTrigger>
-                <TabsTrigger value="calendario" className="text-xs">
-                  <Calendar className="w-3 h-3 mr-1" />
-                  Eventos
-                </TabsTrigger>
-                <TabsTrigger value="fetiches" className="text-xs">
-                  <Heart className="w-3 h-3 mr-1" />
-                  Prácticas
-                </TabsTrigger>
-                {isDeity && (
-                  <TabsTrigger value="asignar" className="text-xs">
-                    <Plus className="w-3 h-3 mr-1" />
-                    Asignar
-                  </TabsTrigger>
-                )}
+            <Tabs defaultValue="info" className="mt-6">
+              <TabsList className="grid w-full grid-cols-3 bg-muted/30">
+                <TabsTrigger value="info">Información</TabsTrigger>
+                <TabsTrigger value="tasks">Tareas</TabsTrigger>
+                <TabsTrigger value="notes">Notas</TabsTrigger>
               </TabsList>
 
-              {/* Tab: Perfil */}
-              <TabsContent value="perfil" className="space-y-4 mt-4">
+              {/* Tab: Información */}
+              <TabsContent value="info" className="space-y-4">
                 <ParchmentCard title="Información Personal" icon={<User className="w-4 h-4" />}>
                   <div className="space-y-3">
                     {member.bio && (
@@ -658,104 +490,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                   </div>
                 </ParchmentCard>
 
-                <ParchmentCard title="Historial de Fe" icon={<Sparkles className="w-4 h-4" />}>
+                <ParchmentCard title="Próximos Eventos" icon={<Calendar className="w-4 h-4" />}>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {faithLog.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Sin movimientos</p>
-                    ) : (
-                      faithLog.map((log) => (
-                        <div
-                          key={log.id}
-                          className="flex items-start justify-between p-2 bg-background/50 rounded-sm border border-border/20 text-xs"
-                        >
-                          <div className="flex-1">
-                            <p className="font-heading text-foreground">{log.reason || "—"}</p>
-                            <p className="text-muted-foreground/70">
-                              {new Date(log.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className={`font-mono ${log.amount > 0 ? "text-gold" : "text-wine"}`}>
-                              {log.amount > 0 ? "+" : ""}{log.amount}
-                            </p>
-                            <p className="text-muted-foreground/70">{log.balance_after} PF</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ParchmentCard>
-              </TabsContent>
-
-              {/* Tab: Actividad */}
-              <TabsContent value="actividad" className="space-y-4 mt-4">
-                <ParchmentCard title="Tareas" icon={<CheckSquare className="w-4 h-4" />}>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {followerTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Sin tareas</p>
-                    ) : (
-                      followerTasks.map((task) => (
-                        <div key={task.id} className="flex items-start gap-2 p-2 bg-background/50 rounded-sm border border-border/20">
-                          {task.is_completed ? (
-                            <CheckCircle2 className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" />
-                          ) : (
-                            <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-heading text-sm text-foreground truncate">{task.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {task.is_completed ? "Completada" : "Pendiente"}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ParchmentCard>
-
-                <ParchmentCard title="Premios" icon={<Gift className="w-4 h-4" />}>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {followerRewards.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Sin premios</p>
-                    ) : (
-                      followerRewards.map((reward) => (
-                        <div key={reward.id} className="flex items-start gap-2 p-2 bg-background/50 rounded-sm border border-gold/20">
-                          <Gift className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-heading text-sm text-foreground truncate">{reward.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {reward.is_used ? "Utilizado" : "Disponible"}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ParchmentCard>
-
-                <ParchmentCard title="Consecuencias" icon={<AlertTriangle className="w-4 h-4" />}>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {followerPunishments.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Sin consecuencias</p>
-                    ) : (
-                      followerPunishments.map((cons) => (
-                        <div key={cons.id} className="flex items-start gap-2 p-2 bg-background/50 rounded-sm border border-wine/20">
-                          <AlertTriangle className="w-4 h-4 text-wine flex-shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-heading text-sm text-foreground truncate">{cons.title}</p>
-                            <p className="text-xs text-muted-foreground">Activa</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ParchmentCard>
-              </TabsContent>
-
-              {/* Tab: Calendario */}
-              <TabsContent value="calendario" className="space-y-4 mt-4">
-                <ParchmentCard title="Próximos Eventos" icon={<Clock className="w-4 h-4" />}>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
                     {events.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">Sin eventos</p>
                     ) : (
@@ -763,37 +499,28 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         const eventDate = new Date(event.event_date);
                         return (
                           <div key={event.id} className="p-3 bg-background/50 rounded-sm border border-border/20">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <p className="font-heading text-sm text-foreground">{event.title}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {eventDate.toLocaleDateString()}
-                                  {event.event_time && ` · ${event.event_time}`}
-                                </p>
-                              </div>
-                            </div>
+                            <p className="font-heading text-sm text-foreground">{event.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {eventDate.toLocaleDateString()}
+                              {event.event_time && ` · ${event.event_time}`}
+                            </p>
                           </div>
                         );
                       })
                     )}
                   </div>
                 </ParchmentCard>
-              </TabsContent>
 
-              {/* Tab: Fetiches */}
-              <TabsContent value="fetiches" className="space-y-4 mt-4">
-                <ParchmentCard title="Prácticas y Fetiches" icon={<Heart className="w-4 h-4" />}>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                <ParchmentCard title="Prácticas" icon={<Heart className="w-4 h-4" />}>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
                     {fetishes.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">Sin prácticas</p>
                     ) : (
                       fetishes.map((uf) => (
                         <div key={uf.id} className="flex items-center justify-between p-2 bg-background/50 rounded-sm border border-border/20">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <p className="font-heading text-sm text-foreground truncate">
-                              {uf.fetishes.name}
-                            </p>
-                            {uf.is_starred && <Star className="w-3 h-3 text-gold flex-shrink-0" />}
+                          <div className="flex items-center gap-2 flex-1">
+                            <p className="font-heading text-sm text-foreground">{uf.fetishes.name}</p>
+                            {uf.is_starred && <Star className="w-3 h-3 text-gold" />}
                           </div>
                           <Badge variant="outline" className={`text-xs ${ratingColors[uf.rating]}`}>
                             {ratingLabels[uf.rating]}
@@ -803,27 +530,476 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                     )}
                   </div>
                 </ParchmentCard>
+
+                <ParchmentCard title="Historial de Fe" icon={<Sparkles className="w-4 h-4" />}>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {faithLog.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">Sin movimientos</p>
+                    ) : (
+                      faithLog.map((log) => (
+                        <div key={log.id} className="flex items-start justify-between p-2 bg-background/50 rounded-sm border border-border/20">
+                          <div className="flex-1">
+                            <p className="font-heading text-xs text-foreground">{log.reason || "—"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(log.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-mono text-xs ${log.amount > 0 ? "text-gold" : "text-wine"}`}>
+                              {log.amount > 0 ? "+" : ""}{log.amount}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ParchmentCard>
               </TabsContent>
 
-              {/* Tab: Asignar (solo deidades) */}
-              {isDeity && (
-                <TabsContent value="asignar" className="space-y-4 mt-4">
-                  <div className="space-y-3">
-                    <RitualButton variant="gold" onClick={() => setShowTaskAssign(true)} className="w-full">
-                      <CheckSquare className="w-4 h-4 mr-2" />
-                      Asignar Tarea
-                    </RitualButton>
-                    <RitualButton variant="gold" onClick={() => setShowRewardAssign(true)} className="w-full">
-                      <Gift className="w-4 h-4 mr-2" />
-                      Otorgar Premio
-                    </RitualButton>
-                    <RitualButton variant="outline" onClick={() => setShowConsequenceAssign(true)} className="w-full border-wine/30 hover:bg-wine/10">
-                      <AlertTriangle className="w-4 h-4 mr-2" />
-                      Asignar Consecuencia
-                    </RitualButton>
-                  </div>
-                </TabsContent>
-              )}
+              {/* Tab: Tareas */}
+              <TabsContent value="tasks" className="space-y-6">
+                {/* Sección: Tareas Asignadas */}
+                <div className="space-y-3">
+                  <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Tareas Asignadas</h3>
+                  {followerTasks.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No hay tareas asignadas
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {followerTasks.map((ft) => (
+                        <div key={ft.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <p className="font-heading text-sm text-foreground">{ft.task_title}</p>
+                              {ft.task_description && (
+                                <p className="text-xs text-muted-foreground mt-1">{ft.task_description}</p>
+                              )}
+                              <div className="flex gap-2 mt-2">
+                                <Badge variant={ft.is_completed ? "default" : "outline"} className="text-xs">
+                                  {ft.is_completed ? "Completada" : "Pendiente"}
+                                </Badge>
+                                {ft.faith_points_reward > 0 && (
+                                  <Badge variant="outline" className="text-xs bg-gold/10 text-gold">
+                                    +{ft.faith_points_reward} PF
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            {isDeity && !ft.is_completed && (
+                              <button
+                                onClick={() => {
+                                  if (confirm("¿Eliminar esta tarea?")) {
+                                    supabase.from("follower_tasks").delete().eq("id", ft.id).then(() => {
+                                      toast({ title: "Tarea eliminada" });
+                                      loadMemberData();
+                                    });
+                                  }
+                                }}
+                                className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {isDeity && (
+                  <>
+                    <Separator className="bg-border/40" />
+
+                    {/* Sección: Asignar Nueva Tarea */}
+                    <div className="space-y-4">
+                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Asignar Nueva Tarea</h3>
+                      
+                      <div className="flex gap-2">
+                        <RitualButton
+                          variant={assignMode === "library" ? "gold" : "outline"}
+                          onClick={() => setAssignMode("library")}
+                          className="flex-1"
+                        >
+                          Biblioteca
+                        </RitualButton>
+                        <RitualButton
+                          variant={assignMode === "custom" ? "gold" : "outline"}
+                          onClick={() => setAssignMode("custom")}
+                          className="flex-1"
+                        >
+                          Personalizada
+                        </RitualButton>
+                      </div>
+
+                      {assignMode === "library" && (
+                        <div className="space-y-3">
+                          {libraryTasks.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No hay tareas en la biblioteca
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                              {libraryTasks.map((task) => (
+                                <div key={task.id} className="p-3 bg-background/60 rounded-sm border border-border/30 hover:border-gold/40 transition-colors">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <p className="font-heading text-sm text-foreground">{task.title}</p>
+                                      {task.description && (
+                                        <p className="text-xs text-muted-foreground mt-1">{task.description}</p>
+                                      )}
+                                      <div className="flex gap-2 mt-2">
+                                        {task.faith_points_reward > 0 && (
+                                          <Badge variant="outline" className="text-xs bg-gold/10 text-gold">
+                                            +{task.faith_points_reward} PF
+                                          </Badge>
+                                        )}
+                                        {task.requires_evidence && (
+                                          <Badge variant="outline" className="text-xs">Requiere evidencia</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <RitualButton
+                                      variant="outline"
+                                      onClick={() => assignTaskFromLibrary(task)}
+                                      className="shrink-0"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </RitualButton>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {assignMode === "custom" && (
+                        <div className="space-y-3">
+                          <Input
+                            placeholder="Título de la tarea"
+                            value={customTaskForm.title}
+                            onChange={(e) => setCustomTaskForm({ ...customTaskForm, title: e.target.value })}
+                          />
+                          <Textarea
+                            placeholder="Descripción (opcional)"
+                            value={customTaskForm.description}
+                            onChange={(e) => setCustomTaskForm({ ...customTaskForm, description: e.target.value })}
+                            rows={3}
+                          />
+                          <Input
+                            type="number"
+                            placeholder="Puntos de Fe"
+                            value={customTaskForm.faith_points}
+                            onChange={(e) => setCustomTaskForm({ ...customTaskForm, faith_points: parseInt(e.target.value) || 0 })}
+                          />
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={customTaskForm.requires_evidence}
+                              onChange={(e) => setCustomTaskForm({ ...customTaskForm, requires_evidence: e.target.checked })}
+                              className="w-4 h-4"
+                            />
+                            <span className="text-sm text-foreground">Requiere evidencia fotográfica</span>
+                          </label>
+                          <RitualButton
+                            variant="gold"
+                            onClick={assignCustomTask}
+                            disabled={!customTaskForm.title.trim()}
+                            className="w-full"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Asignar Tarea Personalizada
+                          </RitualButton>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator className="bg-border/40" />
+
+                    {/* Sección: Premios Asignados */}
+                    <div className="space-y-3">
+                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Premios Asignados</h3>
+                      {followerRewards.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No hay premios asignados
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {followerRewards.map((fr) => (
+                            <div key={fr.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="font-heading text-sm text-foreground">{fr.reward_name}</p>
+                                  {fr.reward_description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{fr.reward_description}</p>
+                                  )}
+                                  <Badge variant={fr.is_used ? "outline" : "default"} className="text-xs mt-2">
+                                    {fr.is_used ? "Utilizado" : "Disponible"}
+                                  </Badge>
+                                </div>
+                                {!fr.is_used && (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm("¿Eliminar este premio?")) {
+                                        supabase.from("follower_rewards").delete().eq("id", fr.id).then(() => {
+                                          toast({ title: "Premio eliminado" });
+                                          loadMemberData();
+                                        });
+                                      }
+                                    }}
+                                    className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator className="bg-border/40" />
+
+                    {/* Sección: Asignar Nuevo Premio */}
+                    <div className="space-y-4">
+                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Asignar Nuevo Premio</h3>
+                      
+                      <div className="flex gap-2">
+                        <RitualButton
+                          variant={rewardAssignMode === "library" ? "gold" : "outline"}
+                          onClick={() => setRewardAssignMode("library")}
+                          className="flex-1"
+                        >
+                          Biblioteca
+                        </RitualButton>
+                        <RitualButton
+                          variant={rewardAssignMode === "custom" ? "gold" : "outline"}
+                          onClick={() => setRewardAssignMode("custom")}
+                          className="flex-1"
+                        >
+                          Personalizado
+                        </RitualButton>
+                      </div>
+
+                      {rewardAssignMode === "library" && (
+                        <div className="space-y-3">
+                          {libraryRewards.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No hay premios en la biblioteca
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                              {libraryRewards.map((reward) => (
+                                <div key={reward.id} className="p-3 bg-background/60 rounded-sm border border-border/30 hover:border-gold/40 transition-colors">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <p className="font-heading text-sm text-foreground">{reward.name}</p>
+                                      {reward.description && (
+                                        <p className="text-xs text-muted-foreground mt-1">{reward.description}</p>
+                                      )}
+                                      {reward.faith_points_cost > 0 && (
+                                        <Badge variant="outline" className="text-xs bg-gold/10 text-gold mt-2">
+                                          {reward.faith_points_cost} PF
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <RitualButton
+                                      variant="outline"
+                                      onClick={() => assignRewardFromLibrary(reward)}
+                                      className="shrink-0"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </RitualButton>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {rewardAssignMode === "custom" && (
+                        <div className="space-y-3">
+                          <Input
+                            placeholder="Nombre del premio"
+                            value={customRewardForm.name}
+                            onChange={(e) => setCustomRewardForm({ ...customRewardForm, name: e.target.value })}
+                          />
+                          <Textarea
+                            placeholder="Descripción (opcional)"
+                            value={customRewardForm.description}
+                            onChange={(e) => setCustomRewardForm({ ...customRewardForm, description: e.target.value })}
+                            rows={3}
+                          />
+                          <RitualButton
+                            variant="gold"
+                            onClick={assignCustomReward}
+                            disabled={!customRewardForm.name.trim()}
+                            className="w-full"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Asignar Premio Personalizado
+                          </RitualButton>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator className="bg-border/40" />
+
+                    {/* Sección: Consecuencias Asignadas */}
+                    <div className="space-y-3">
+                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Consecuencias Asignadas</h3>
+                      {followerPunishments.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No hay consecuencias asignadas
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {followerPunishments.map((fp) => (
+                            <div key={fp.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="font-heading text-sm text-foreground">{fp.punishment_name}</p>
+                                  {fp.punishment_description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{fp.punishment_description}</p>
+                                  )}
+                                  <div className="flex gap-2 mt-2">
+                                    <Badge variant={fp.is_completed ? "default" : "outline"} className="text-xs">
+                                      {fp.is_completed ? "Cumplida" : "Activa"}
+                                    </Badge>
+                                    {fp.faith_points_cost > 0 && (
+                                      <Badge variant="outline" className="text-xs bg-wine/20 text-wine">
+                                        {fp.faith_points_cost} PF para quitar
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {!fp.is_completed && (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm("¿Eliminar esta consecuencia?")) {
+                                        supabase.from("follower_punishments").delete().eq("id", fp.id).then(() => {
+                                          toast({ title: "Consecuencia eliminada" });
+                                          loadMemberData();
+                                        });
+                                      }
+                                    }}
+                                    className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator className="bg-border/40" />
+
+                    {/* Sección: Asignar Nueva Consecuencia */}
+                    <div className="space-y-4">
+                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Asignar Nueva Consecuencia</h3>
+                      
+                      <div className="flex gap-2">
+                        <RitualButton
+                          variant={punishmentAssignMode === "library" ? "gold" : "outline"}
+                          onClick={() => setPunishmentAssignMode("library")}
+                          className="flex-1"
+                        >
+                          Biblioteca
+                        </RitualButton>
+                        <RitualButton
+                          variant={punishmentAssignMode === "custom" ? "gold" : "outline"}
+                          onClick={() => setPunishmentAssignMode("custom")}
+                          className="flex-1"
+                        >
+                          Personalizada
+                        </RitualButton>
+                      </div>
+
+                      {punishmentAssignMode === "library" && (
+                        <div className="space-y-3">
+                          {libraryPunishments.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No hay consecuencias en la biblioteca
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                              {libraryPunishments.map((punishment) => (
+                                <div key={punishment.id} className="p-3 bg-background/60 rounded-sm border border-border/30 hover:border-gold/40 transition-colors">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <p className="font-heading text-sm text-foreground">{punishment.name}</p>
+                                      {punishment.description && (
+                                        <p className="text-xs text-muted-foreground mt-1">{punishment.description}</p>
+                                      )}
+                                      {punishment.faith_points_cost > 0 && (
+                                        <Badge variant="outline" className="text-xs bg-wine/20 text-wine mt-2">
+                                          {punishment.faith_points_cost} PF para quitar
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <RitualButton
+                                      variant="outline"
+                                      onClick={() => assignPunishmentFromLibrary(punishment)}
+                                      className="shrink-0"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </RitualButton>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {punishmentAssignMode === "custom" && (
+                        <div className="space-y-3">
+                          <Input
+                            placeholder="Nombre de la consecuencia"
+                            value={customPunishmentForm.name}
+                            onChange={(e) => setCustomPunishmentForm({ ...customPunishmentForm, name: e.target.value })}
+                          />
+                          <Textarea
+                            placeholder="Descripción (opcional)"
+                            value={customPunishmentForm.description}
+                            onChange={(e) => setCustomPunishmentForm({ ...customPunishmentForm, description: e.target.value })}
+                            rows={3}
+                          />
+                          <Input
+                            type="number"
+                            placeholder="Puntos de Fe para quitar"
+                            value={customPunishmentForm.faith_points}
+                            onChange={(e) => setCustomPunishmentForm({ ...customPunishmentForm, faith_points: parseInt(e.target.value) || 0 })}
+                          />
+                          <RitualButton
+                            variant="gold"
+                            onClick={assignCustomPunishment}
+                            disabled={!customPunishmentForm.name.trim()}
+                            className="w-full"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Asignar Consecuencia Personalizada
+                          </RitualButton>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+
+              {/* Tab: Notas */}
+              <TabsContent value="notes" className="space-y-4">
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Sección de notas próximamente
+                </p>
+              </TabsContent>
             </Tabs>
           </>
         ) : (
@@ -832,263 +1008,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           </div>
         )}
       </SheetContent>
-
-      {/* Modal: Asignar Tarea */}
-      <Dialog open={showTaskAssign} onOpenChange={setShowTaskAssign}>
-        <DialogContent className="bg-card border-2 border-gold/30 max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl text-foreground">Asignar Tarea</DialogTitle>
-          </DialogHeader>
-
-          <Tabs defaultValue="templates" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2 bg-muted/30">
-              <TabsTrigger value="templates">Biblioteca</TabsTrigger>
-              <TabsTrigger value="custom">Personalizada</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="templates" className="space-y-2">
-              {libraryTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No hay tareas en la biblioteca
-                </p>
-              ) : (
-                libraryTasks.map((task) => (
-                  <div key={task.id} className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2">
-                    <div>
-                      <h4 className="font-heading text-sm text-foreground">{task.title}</h4>
-                      {task.description && (
-                        <p className="font-body text-xs text-muted-foreground mt-1">{task.description}</p>
-                      )}
-                      <div className="flex gap-2 mt-2">
-                        {task.faith_points_reward > 0 && (
-                          <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30 text-xs">
-                            +{task.faith_points_reward} PF
-                          </Badge>
-                        )}
-                        {task.requires_evidence && (
-                          <Badge variant="outline" className="text-xs">Requiere evidencia</Badge>
-                        )}
-                      </div>
-                    </div>
-                    <RitualButton variant="outline" onClick={() => assignTaskFromTemplate(task.id)} className="w-full">
-                      Asignar
-                    </RitualButton>
-                  </div>
-                ))
-              )}
-            </TabsContent>
-
-            <TabsContent value="custom" className="space-y-4">
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Título *</label>
-                <Input
-                  value={customTaskForm.title}
-                  onChange={(e) => setCustomTaskForm({ ...customTaskForm, title: e.target.value })}
-                  placeholder="Nombre de la tarea"
-                />
-              </div>
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Descripción</label>
-                <Textarea
-                  value={customTaskForm.description}
-                  onChange={(e) => setCustomTaskForm({ ...customTaskForm, description: e.target.value })}
-                  placeholder="Detalles opcionales"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Puntos de Fe</label>
-                <Input
-                  type="number"
-                  value={customTaskForm.faith_points}
-                  onChange={(e) => setCustomTaskForm({ ...customTaskForm, faith_points: parseInt(e.target.value) || 0 })}
-                  min="0"
-                />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={customTaskForm.requires_evidence}
-                  onChange={(e) => setCustomTaskForm({ ...customTaskForm, requires_evidence: e.target.checked })}
-                  className="w-4 h-4 accent-gold"
-                />
-                <span className="font-body text-sm text-foreground">Requiere evidencia fotográfica</span>
-              </label>
-              <RitualButton variant="gold" onClick={assignCustomTask} className="w-full">
-                Asignar Tarea Personalizada
-              </RitualButton>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter>
-            <button onClick={() => setShowTaskAssign(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
-              Cerrar
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal: Otorgar Premio */}
-      <Dialog open={showRewardAssign} onOpenChange={setShowRewardAssign}>
-        <DialogContent className="bg-card border-2 border-gold/30 max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl text-foreground">Otorgar Premio</DialogTitle>
-          </DialogHeader>
-
-          <Tabs defaultValue="templates" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2 bg-muted/30">
-              <TabsTrigger value="templates">Biblioteca</TabsTrigger>
-              <TabsTrigger value="custom">Personalizado</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="templates" className="space-y-2">
-              {libraryRewards.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No hay premios en la biblioteca
-                </p>
-              ) : (
-                libraryRewards.map((reward) => (
-                  <div key={reward.id} className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2">
-                    <div>
-                      <h4 className="font-heading text-sm text-foreground">{reward.name}</h4>
-                      {reward.description && (
-                        <p className="font-body text-xs text-muted-foreground mt-1">{reward.description}</p>
-                      )}
-                      {reward.faith_points_cost > 0 && (
-                        <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30 text-xs mt-2">
-                          {reward.faith_points_cost} PF
-                        </Badge>
-                      )}
-                    </div>
-                    <RitualButton variant="outline" onClick={() => assignRewardFromTemplate(reward.id)} className="w-full">
-                      Otorgar
-                    </RitualButton>
-                  </div>
-                ))
-              )}
-            </TabsContent>
-
-            <TabsContent value="custom" className="space-y-4">
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Título *</label>
-                <Input
-                  value={customRewardForm.title}
-                  onChange={(e) => setCustomRewardForm({ ...customRewardForm, title: e.target.value })}
-                  placeholder="Nombre del premio"
-                />
-              </div>
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Descripción</label>
-                <Textarea
-                  value={customRewardForm.description}
-                  onChange={(e) => setCustomRewardForm({ ...customRewardForm, description: e.target.value })}
-                  placeholder="Detalles opcionales"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Costo en Puntos de Fe</label>
-                <Input
-                  type="number"
-                  value={customRewardForm.faith_points}
-                  onChange={(e) => setCustomRewardForm({ ...customRewardForm, faith_points: parseInt(e.target.value) || 0 })}
-                  min="0"
-                />
-              </div>
-              <RitualButton variant="gold" onClick={assignCustomReward} className="w-full">
-                Otorgar Premio Personalizado
-              </RitualButton>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter>
-            <button onClick={() => setShowRewardAssign(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
-              Cerrar
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal: Asignar Consecuencia */}
-      <Dialog open={showConsequenceAssign} onOpenChange={setShowConsequenceAssign}>
-        <DialogContent className="bg-card border-2 border-gold/30 max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl text-foreground">Asignar Consecuencia</DialogTitle>
-          </DialogHeader>
-
-          <Tabs defaultValue="templates" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2 bg-muted/30">
-              <TabsTrigger value="templates">Biblioteca</TabsTrigger>
-              <TabsTrigger value="custom">Personalizada</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="templates" className="space-y-2">
-              {libraryPunishments.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No hay consecuencias en la biblioteca
-                </p>
-              ) : (
-                libraryPunishments.map((cons) => (
-                  <div key={cons.id} className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2">
-                    <div>
-                      <h4 className="font-heading text-sm text-foreground">{cons.name}</h4>
-                      {cons.description && (
-                        <p className="font-body text-xs text-muted-foreground mt-1">{cons.description}</p>
-                      )}
-                      {cons.faith_points_cost > 0 && (
-                        <Badge variant="outline" className="bg-wine/20 text-wine border-wine/40 text-xs mt-2">
-                          {cons.faith_points_cost} PF para quitar
-                        </Badge>
-                      )}
-                    </div>
-                    <RitualButton variant="outline" onClick={() => assignConsequenceFromTemplate(cons.id)} className="w-full">
-                      Asignar
-                    </RitualButton>
-                  </div>
-                ))
-              )}
-            </TabsContent>
-
-            <TabsContent value="custom" className="space-y-4">
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Título *</label>
-                <Input
-                  value={customConsequenceForm.title}
-                  onChange={(e) => setCustomConsequenceForm({ ...customConsequenceForm, title: e.target.value })}
-                  placeholder="Nombre de la consecuencia"
-                />
-              </div>
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Descripción</label>
-                <Textarea
-                  value={customConsequenceForm.description}
-                  onChange={(e) => setCustomConsequenceForm({ ...customConsequenceForm, description: e.target.value })}
-                  placeholder="Detalles opcionales"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="font-heading text-xs text-muted-foreground uppercase block mb-1">Puntos de Fe para eliminar</label>
-                <Input
-                  type="number"
-                  value={customConsequenceForm.faith_points}
-                  onChange={(e) => setCustomConsequenceForm({ ...customConsequenceForm, faith_points: parseInt(e.target.value) || 0 })}
-                  min="0"
-                />
-              </div>
-              <RitualButton variant="gold" onClick={assignCustomConsequence} className="w-full">
-                Asignar Consecuencia Personalizada
-              </RitualButton>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter>
-            <button onClick={() => setShowConsequenceAssign(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
-              Cerrar
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Sheet>
   );
 }
