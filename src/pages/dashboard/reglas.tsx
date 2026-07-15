@@ -47,7 +47,7 @@ export default function ReglasPage() {
     }
 
     const { data, error } = await supabase
-      .from("cult_rules")
+      .from("rules")
       .select("*")
       .eq("cult_id", profile.cult_id)
       .order("created_at", { ascending: true });
@@ -68,7 +68,7 @@ export default function ReglasPage() {
     e.preventDefault();
     if (!newRuleTitle.trim() || !newRuleContent.trim() || !profile?.cult_id) return;
 
-    const { error } = await supabase.from("cult_rules").insert({
+    const { error } = await supabase.from("rules").insert({
       rule_type: newRuleType,
       title: newRuleTitle,
       content: newRuleContent,
@@ -94,7 +94,7 @@ export default function ReglasPage() {
   };
 
   const deleteRule = async (id: string) => {
-    const { error } = await supabase.from("cult_rules").delete().eq("id", id);
+    const { error } = await supabase.from("rules").delete().eq("id", id);
 
     if (error) {
       toast({

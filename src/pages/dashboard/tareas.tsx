@@ -13,18 +13,28 @@ interface Task {
   id: string;
   title: string;
   description: string | null;
-  due_date: string | null;
-  faith_points: number;
-  status: "pending" | "completed";
-  assigned_to: string;
-  assigned_by: string;
+  faith_points_reward: number;
+  requires_evidence: boolean;
+  cult_id: string;
   created_at: string;
+}
+
+interface AssignedTask {
+  id: string;
+  task_id: string;
+  follower_id: string;
+  assigned_by: string;
+  status: "pending" | "completed" | "verified";
+  evidence_url: string | null;
+  completed_at: string | null;
+  created_at: string;
+  tasks: Task;
 }
 
 export default function TareasPage() {
   const { profile, user } = useAuth();
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
@@ -42,9 +52,9 @@ export default function TareasPage() {
     }
 
     const { data, error } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("assigned_to", user.id)
+      .from("assigned_tasks")
+      .select("*, tasks(*)")
+      .eq("follower_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -54,18 +64,21 @@ export default function TareasPage() {
         variant: "destructive",
       });
     } else {
-      setTasks(data || []);
+      setAssignedTasks(data || []);
     }
     setIsLoading(false);
   };
 
-  const toggleTaskStatus = async (task: Task) => {
-    const newStatus = task.status === "pending" ? "completed" : "pending";
+  const toggleTaskStatus = async (assignedTask: AssignedTask) => {
+    const newStatus = assignedTask.status === "pending" ? "completed" : "pending";
 
     const { error } = await supabase
-      .from("tasks")
-      .update({ status: newStatus })
-      .eq("id", task.id);
+      .from("assigned_tasks")
+      .update({ 
+        status: newStatus,
+        completed_at: newStatus === "completed" ? new Date().toISOString() : null
+      })
+      .eq("id", assignedTask.id);
 
     if (error) {
       toast({
@@ -77,7 +90,7 @@ export default function TareasPage() {
       toast({
         title: newStatus === "completed" ? "Tarea completada" : "Tarea reactivada",
         description: newStatus === "completed" 
-          ? `Has completado: ${task.title}` 
+          ? `Has completado: ${assignedTask.tasks.title}` 
           : `Tarea marcada como pendiente`,
       });
       loadTasks();
@@ -86,21 +99,44 @@ export default function TareasPage() {
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle.trim() || !user) return;
+    if (!newTaskTitle.trim() || !user || !profile?.cult_id) return;
 
-    const { error } = await supabase.from("tasks").insert({
-      title: newTaskTitle,
-      description: newTaskDescription || null,
-      faith_points: newTaskFaithPoints,
-      status: "pending",
-      assigned_to: user.id,
-      assigned_by: user.id,
-    });
+    // Primero crear la plantilla de tarea
+    const { data: task, error: taskError } = await supabase
+      .from("tasks")
+      .insert({
+        title: newTaskTitle,
+        description: newTaskDescription || null,
+        faith_points_reward: newTaskFaithPoints,
+        requires_evidence: false,
+        cult_id: profile.cult_id,
+      })
+      .select()
+      .single();
 
-    if (error) {
+    if (taskError || !task) {
       toast({
         title: "Error",
-        description: `No se pudo crear la tarea: ${error.message}`,
+        description: `No se pudo crear la tarea: ${taskError?.message}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Luego asignarla al usuario actual (para testing)
+    const { error: assignError } = await supabase
+      .from("assigned_tasks")
+      .insert({
+        task_id: task.id,
+        follower_id: user.id,
+        assigned_by: user.id,
+        status: "pending",
+      });
+
+    if (assignError) {
+      toast({
+        title: "Error",
+        description: `No se pudo asignar la tarea: ${assignError.message}`,
         variant: "destructive",
       });
     } else {
@@ -117,7 +153,10 @@ export default function TareasPage() {
   };
 
   const deleteTask = async (id: string) => {
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    const { error } = await supabase
+      .from("assigned_tasks")
+      .delete()
+      .eq("id", id);
 
     if (error) {
       toast({
@@ -144,8 +183,8 @@ export default function TareasPage() {
     );
   }
 
-  const pendingTasks = tasks.filter(t => t.status === "pending");
-  const completedTasks = tasks.filter(t => t.status === "completed");
+  const pendingTasks = assignedTasks.filter(t => t.status === "pending");
+  const completedTasks = assignedTasks.filter(t => t.status === "completed");
 
   return (
     <AppLayout title="Tareas" icon={<Settings className="w-5 h-5" />}>
@@ -166,33 +205,33 @@ export default function TareasPage() {
                   No hay tareas pendientes
                 </p>
               ) : (
-                pendingTasks.map((task, i) => (
+                pendingTasks.map((assignedTask, i) => (
                   <motion.div
-                    key={task.id}
+                    key={assignedTask.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05 }}
                     className="flex items-start gap-3 p-3 bg-background/50 rounded-sm border border-border/30"
                   >
                     <button
-                      onClick={() => toggleTaskStatus(task)}
+                      onClick={() => toggleTaskStatus(assignedTask)}
                       className="p-1 text-muted-foreground hover:text-gold transition-colors"
                     >
                       <Circle className="w-5 h-5" />
                     </button>
                     <div className="flex-1 space-y-1">
-                      <h3 className="font-heading text-sm text-foreground">{task.title}</h3>
-                      {task.description && (
-                        <p className="font-body text-xs text-muted-foreground">{task.description}</p>
+                      <h3 className="font-heading text-sm text-foreground">{assignedTask.tasks.title}</h3>
+                      {assignedTask.tasks.description && (
+                        <p className="font-body text-xs text-muted-foreground">{assignedTask.tasks.description}</p>
                       )}
-                      {task.faith_points > 0 && (
+                      {assignedTask.tasks.faith_points_reward > 0 && (
                         <span className="inline-block px-2 py-0.5 bg-gold/20 text-gold text-xs font-heading rounded-sm">
-                          +{task.faith_points} PF
+                          +{assignedTask.tasks.faith_points_reward} PF
                         </span>
                       )}
                     </div>
                     <button
-                      onClick={() => deleteTask(task.id)}
+                      onClick={() => deleteTask(assignedTask.id)}
                       className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -207,30 +246,30 @@ export default function TareasPage() {
           {completedTasks.length > 0 && (
             <ParchmentCard title="Completadas" icon={<CheckCircle2 className="w-4 h-4" />}>
               <div className="space-y-2">
-                {completedTasks.map((task, i) => (
+                {completedTasks.map((assignedTask, i) => (
                   <motion.div
-                    key={task.id}
+                    key={assignedTask.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.05 }}
                     className="flex items-start gap-3 p-3 bg-background/30 rounded-sm border border-border/20 opacity-60"
                   >
                     <button
-                      onClick={() => toggleTaskStatus(task)}
+                      onClick={() => toggleTaskStatus(assignedTask)}
                       className="p-1 text-gold"
                     >
                       <CheckCircle2 className="w-5 h-5" />
                     </button>
                     <div className="flex-1 space-y-1">
-                      <h3 className="font-heading text-sm text-foreground line-through">{task.title}</h3>
-                      {task.faith_points > 0 && (
+                      <h3 className="font-heading text-sm text-foreground line-through">{assignedTask.tasks.title}</h3>
+                      {assignedTask.tasks.faith_points_reward > 0 && (
                         <span className="inline-block px-2 py-0.5 bg-gold/20 text-gold text-xs font-heading rounded-sm">
-                          +{task.faith_points} PF
+                          +{assignedTask.tasks.faith_points_reward} PF
                         </span>
                       )}
                     </div>
                     <button
-                      onClick={() => deleteTask(task.id)}
+                      onClick={() => deleteTask(assignedTask.id)}
                       className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
