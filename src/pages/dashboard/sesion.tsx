@@ -85,6 +85,10 @@ export default function SesionPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Refs para valores que se usan en Realtime pero no deben recrear el canal
+  const cardsRef = useRef<SessionCard[]>([]);
+  const activeSessionRef = useRef<ActiveSession | null>(null);
+  
   // Estado de la sesión
   const [rpm, setRpm] = useState(60);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -142,6 +146,15 @@ export default function SesionPage() {
       }
     };
   }, []);
+
+  // Actualizar refs cuando cambien los valores
+  useEffect(() => {
+    cardsRef.current = cards;
+  }, [cards]);
+
+  useEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
 
   // Beat automático
   useEffect(() => {
@@ -208,18 +221,18 @@ export default function SesionPage() {
               setIsMuted(updated.is_muted_for_deity);
             }
             
-            // Reproducir beat manual (solo fieles)
+            // Reproducir beat manual (solo fieles) - usar ref para comparación
             if (!isDeity && updated.manual_beat_trigger) {
-              const oldTrigger = activeSession.manual_beat_trigger;
+              const oldTrigger = activeSessionRef.current?.manual_beat_trigger;
               if (oldTrigger !== updated.manual_beat_trigger) {
                 playBeat();
                 animateBeatCircle();
               }
             }
             
-            // Actualizar tarjeta activa
+            // Actualizar tarjeta activa - usar ref para buscar tarjetas
             if (updated.current_card_id && updated.current_card_id !== activeCard?.id) {
-              const card = cards.find(c => c.id === updated.current_card_id);
+              const card = cardsRef.current.find(c => c.id === updated.current_card_id);
               if (card) {
                 setActiveCard(card);
                 setCardDuration(updated.card_duration_seconds);
