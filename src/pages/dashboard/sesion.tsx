@@ -162,12 +162,14 @@ export default function SesionPage() {
 
     const interval = 60000 / rpm; // milisegundos por beat
     const beatInterval = setInterval(() => {
+      // Los fieles siempre escuchan; las deidades respetan el mute
+      if (isDeity && isMuted) return;
       playBeat();
       animateBeatCircle();
     }, interval);
 
     return () => clearInterval(beatInterval);
-  }, [isPlaying, rpm, isMuted]);
+  }, [isPlaying, rpm, isMuted, isDeity]);
 
   // Temporizador de tarjeta
   useEffect(() => {
@@ -192,6 +194,8 @@ export default function SesionPage() {
   useEffect(() => {
     if (!activeSession) return;
 
+    console.log(`[Realtime] Subscribing to session: ${activeSession.id}`);
+
     const channel = supabase
       .channel(`session:${activeSession.id}`)
       .on(
@@ -203,21 +207,26 @@ export default function SesionPage() {
           filter: `id=eq.${activeSession.id}`,
         },
         (payload) => {
+          console.log("[Realtime] Received update:", payload);
+          
           if (payload.eventType === "UPDATE") {
             const updated = payload.new as ActiveSession;
             
             // Actualizar RPM
             if (updated.current_rpm !== rpm) {
+              console.log(`[Realtime] RPM changed: ${rpm} → ${updated.current_rpm}`);
               setRpm(updated.current_rpm);
             }
             
             // Actualizar play/pause
             if (updated.is_playing !== isPlaying) {
+              console.log(`[Realtime] Playing changed: ${isPlaying} → ${updated.is_playing}`);
               setIsPlaying(updated.is_playing);
             }
             
             // Actualizar mute (solo deidades)
             if (isDeity && updated.is_muted_for_deity !== isMuted) {
+              console.log(`[Realtime] Mute changed: ${isMuted} → ${updated.is_muted_for_deity}`);
               setIsMuted(updated.is_muted_for_deity);
             }
             
@@ -225,6 +234,7 @@ export default function SesionPage() {
             if (!isDeity && updated.manual_beat_trigger) {
               const oldTrigger = activeSessionRef.current?.manual_beat_trigger;
               if (oldTrigger !== updated.manual_beat_trigger) {
+                console.log(`[Realtime] Manual beat triggered: ${oldTrigger} → ${updated.manual_beat_trigger}`);
                 playBeat();
                 animateBeatCircle();
               }
@@ -232,6 +242,7 @@ export default function SesionPage() {
             
             // Actualizar tarjeta activa - usar ref para buscar tarjetas
             if (updated.current_card_id && updated.current_card_id !== activeCard?.id) {
+              console.log(`[Realtime] Card changed: ${activeCard?.id} → ${updated.current_card_id}`);
               const card = cardsRef.current.find(c => c.id === updated.current_card_id);
               if (card) {
                 setActiveCard(card);
@@ -248,6 +259,7 @@ export default function SesionPage() {
                 }
               }
             } else if (!updated.current_card_id && activeCard) {
+              console.log("[Realtime] Card removed");
               setActiveCard(null);
               setCardDuration(null);
               setCardTimeLeft(null);
@@ -258,9 +270,22 @@ export default function SesionPage() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[Realtime] Subscription status:", status);
+        if (status === "SUBSCRIBED") {
+          console.log("[Realtime] Successfully subscribed to session updates");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[Realtime] Channel error - real-time updates may not work");
+          toast({
+            title: "Error de sincronización",
+            description: "La sincronización en tiempo real puede no funcionar correctamente",
+            variant: "destructive",
+          });
+        }
+      });
 
     return () => {
+      console.log("[Realtime] Unsubscribing from session");
       supabase.removeChannel(channel);
     };
   }, [activeSession?.id, isDeity]);
@@ -366,7 +391,9 @@ export default function SesionPage() {
   };
 
   const playBeat = () => {
-    if (isMuted && isDeity) return;
+    // Solo las deidades pueden silenciarse; los fieles siempre escuchan
+    if (isDeity && isMuted) return;
+    
     if (!audioContextRef.current) return;
 
     const ctx = audioContextRef.current;
