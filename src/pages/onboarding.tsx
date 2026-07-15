@@ -20,10 +20,10 @@ export default function OnboardingPage() {
           <div className="text-center space-y-3">
             <Sparkles className="w-8 h-8 text-gold mx-auto" />
             <h1 className="font-display text-3xl text-foreground">
-              Elige tu Destino
+              Primer Ritual
             </h1>
             <p className="font-body text-sm text-muted-foreground">
-              Todo culto necesita un origen. ¿Serás tú quien lo funde, o quien se una a uno ya existente?
+              Bienvenido al Códice Oscuro. ¿Fundarás tu propio culto o te unirás a uno existente?
             </p>
           </div>
 

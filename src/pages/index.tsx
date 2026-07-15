@@ -171,14 +171,12 @@ export default function Home() {
             </div>
 
             <h1 className="font-display text-4xl md:text-5xl text-foreground leading-tight">
-              El Grimorio de
-              <br />
-              <span className="text-gold gold-glow">la Casa Nocturna</span>
+              <span className="text-gold gold-glow">Códice Oscuro</span>
             </h1>
 
             <p className="font-body text-base md:text-lg text-muted-foreground max-w-md mx-auto italic">
-              &ldquo;Quien entra abandona la luz del mundo exterior
-              para encontrar su verdadero propósito en la sombra&rdquo;
+              &ldquo;Grimorio ritual para quienes abrazan la oscuridad
+              y encuentran poder en la entrega consensuada&rdquo;
             </p>
           </motion.div>
 
@@ -496,7 +494,7 @@ export default function Home() {
             className="mt-8 flex items-center gap-2 text-muted-foreground/50 text-xs font-heading tracking-wider"
           >
             <Book className="w-3 h-3" />
-            <span>© 2026 Casa Nocturna</span>
+            <span>© 2026 Códice Oscuro</span>
             <span className="mx-2">·</span>
             <Shield className="w-3 h-3" />
             <span>18+ Solo adultos</span>
@@ -594,7 +592,7 @@ function OnboardingFlow({ displayName }: { displayName: string }) {
               <Crown className="w-8 h-8 text-gold mb-3" />
               <h3 className="font-heading text-lg text-foreground mb-2">Fundar un Culto</h3>
               <p className="font-body text-sm text-muted-foreground">
-                Serás la Deidad Principal. Tendrás control absoluto sobre tu Casa Nocturna.
+                Serás la Deidad Principal. Tendrás control absoluto sobre tu culto en el Códice Oscuro.
               </p>
             </motion.button>
 
@@ -626,7 +624,7 @@ function OnboardingFlow({ displayName }: { displayName: string }) {
         >
           <div className="text-center space-y-2 mb-6">
             <Crown className="w-8 h-8 text-gold mx-auto" />
-            <h2 className="font-heading text-xl text-foreground">Fundar tu Casa Nocturna</h2>
+            <h2 className="font-heading text-xl text-foreground">Fundar tu Culto</h2>
             <p className="font-body text-sm text-muted-foreground">
               Como Deidad Principal, todo dependerá de ti
             </p>
