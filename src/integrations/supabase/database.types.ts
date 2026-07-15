@@ -154,6 +154,42 @@ export type Database = {
         }
         Relationships: []
       }
+      faith_points_log: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          deity_id: string | null
+          id: string
+          reason: string
+          related_id: string | null
+          transaction_type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string
+          deity_id?: string | null
+          id?: string
+          reason: string
+          related_id?: string | null
+          transaction_type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          deity_id?: string | null
+          id?: string
+          reason?: string
+          related_id?: string | null
+          transaction_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       fetish_ratings: {
         Row: {
           created_at: string | null
@@ -327,6 +363,7 @@ export type Database = {
           cult_id: string | null
           display_name: string | null
           email: string | null
+          faith_points: number
           full_name: string | null
           id: string
           is_main_deity: boolean | null
@@ -345,6 +382,7 @@ export type Database = {
           cult_id?: string | null
           display_name?: string | null
           email?: string | null
+          faith_points?: number
           full_name?: string | null
           id: string
           is_main_deity?: boolean | null
@@ -363,6 +401,7 @@ export type Database = {
           cult_id?: string | null
           display_name?: string | null
           email?: string | null
+          faith_points?: number
           full_name?: string | null
           id?: string
           is_main_deity?: boolean | null
@@ -604,7 +643,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      log_faith_points_transaction: {
+        Args: {
+          p_amount: number
+          p_deity_id: string
+          p_reason: string
+          p_related_id?: string
+          p_transaction_type: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { ParchmentCard } from "@/components/ui/parchment-card";
-import { Crown, Heart, Scroll, Users, Star, Settings, LogOut, Loader2, Key } from "lucide-react";
+import { Crown, Heart, Scroll, Users, Star, Settings, LogOut, Loader2, Key, Shield, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
@@ -67,16 +67,18 @@ export default function Dashboard() {
 
 function DeityMenu() {
   const menuItems = [
-    { icon: <Scroll className="w-5 h-5" />, title: "El Culto", desc: "Nombre, imagen y presentación", href: "/dashboard/culto" },
-    { icon: <Users className="w-5 h-5" />, title: "Jerarquía", desc: "Deidades y fieles del culto", href: "/dashboard/jerarquia" },
-    { icon: <Star className="w-5 h-5" />, title: "Rangos", desc: "Niveles y títulos de los fieles", href: "/dashboard/rangos" },
-    { icon: <Scroll className="w-5 h-5" />, title: "Leyes y Reglas", desc: "Mandamientos y oraciones", href: "/dashboard/reglas" },
-    { icon: <Star className="w-5 h-5" />, title: "Tareas y Premios", desc: "Recompensas, castigos y tareas", href: "/dashboard/tareas" },
-    { icon: <Heart className="w-5 h-5" />, title: "Fetiches", desc: "Prácticas y preferencias", href: "/dashboard/fetiches" },
-    { icon: <Scroll className="w-5 h-5" />, title: "Notas", desc: "Apuntes personales", href: "/dashboard/notas" },
-    { icon: <Settings className="w-5 h-5" />, title: "Sesión", desc: "Beats, tarjetas y control", href: "/dashboard/sesion" },
-    { icon: <Users className="w-5 h-5" />, title: "Perfil", desc: "Mis datos y configuración", href: "/dashboard/perfil" },
-    { icon: <Key className="w-5 h-5" />, title: "Códigos", desc: "Invitar nuevos miembros", href: "/dashboard/codigos" },
+    { icon: <Scroll className="w-5 h-5" />, title: "El Culto", desc: "Información y presentación", href: "/dashboard/culto" },
+    { icon: <Users className="w-5 h-5" />, title: "Jerarquía", desc: "Ver estructura", href: "/dashboard/jerarquia" },
+    { icon: <Shield className="w-5 h-5" />, title: "Rangos", desc: "Gestionar niveles", href: "/dashboard/rangos" },
+    { icon: <Scroll className="w-5 h-5" />, title: "Reglas", desc: "Leyes y mandamientos", href: "/dashboard/reglas" },
+    { icon: <Sparkles className="w-5 h-5" />, title: "Puntos de Fe", desc: "Recompensas espirituales", href: "/dashboard/puntos-fe" },
+    { icon: <Settings className="w-5 h-5" />, title: "Tareas", desc: "Asignaciones", href: "/dashboard/tareas" },
+    { icon: <Heart className="w-5 h-5" />, title: "Fetiches", desc: "Prácticas del culto", href: "/dashboard/fetiches" },
+    { icon: <Star className="w-5 h-5" />, title: "Almanaque", desc: "Calendario ritual", href: "/dashboard/almanaque" },
+    { icon: <Settings className="w-5 h-5" />, title: "Sesión", desc: "Control BDSM", href: "/dashboard/sesion" },
+    { icon: <Key className="w-5 h-5" />, title: "Códigos", desc: "Invitaciones", href: "/dashboard/codigos" },
+    { icon: <Scroll className="w-5 h-5" />, title: "Notas", desc: "Anotaciones privadas", href: "/dashboard/notas" },
+    { icon: <Users className="w-5 h-5" />, title: "Mi Perfil", desc: "Datos personales", href: "/dashboard/perfil" },
   ];
 
   return (
@@ -108,6 +110,7 @@ function FollowerMenu() {
     { icon: <Scroll className="w-5 h-5" />, title: "El Culto", desc: "Ver información del culto", href: "/dashboard/culto" },
     { icon: <Scroll className="w-5 h-5" />, title: "Reglas", desc: "Leyes y mandamientos", href: "/dashboard/reglas" },
     { icon: <Users className="w-5 h-5" />, title: "Mi Perfil", desc: "Datos personales y rango", href: "/dashboard/perfil" },
+    { icon: <Sparkles className="w-5 h-5" />, title: "Puntos de Fe", desc: "Mi progreso espiritual", href: "/dashboard/puntos-fe" },
     { icon: <Star className="w-5 h-5" />, title: "Almanaque", desc: "Calendario infinito", href: "/dashboard/almanaque" },
     { icon: <Heart className="w-5 h-5" />, title: "Fetiches", desc: "Marcar prácticas", href: "/dashboard/fetiches" },
     { icon: <Settings className="w-5 h-5" />, title: "Tareas", desc: "Mis asignaciones", href: "/dashboard/tareas" },
