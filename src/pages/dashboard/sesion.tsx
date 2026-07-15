@@ -33,7 +33,7 @@ import {
 interface BeatPattern {
   id: string;
   name: string;
-  intervals: number[];
+  pattern_data: any; // jsonb
   created_at: string;
 }
 
@@ -42,7 +42,7 @@ interface SessionCard {
   card_type: string;
   title: string;
   description: string | null;
-  is_official: boolean;
+  is_template: boolean;
 }
 
 interface SessionAudio {
@@ -224,7 +224,7 @@ export default function SesionPage() {
       const { data: cardsData } = await supabase
         .from("session_cards")
         .select("*")
-        .or(`cult_id.eq.${profile.cult_id},is_official.eq.true`)
+        .eq("cult_id", profile.cult_id)
         .order("created_at", { ascending: false });
       setCards(cardsData || []);
 
@@ -366,9 +366,9 @@ export default function SesionPage() {
 
     const { error } = await supabase.from("beat_patterns").insert({
       cult_id: profile.cult_id,
-      created_by: user.id,
+      creator_id: user.id,
       name: newPatternName,
-      intervals: recordedIntervals,
+      pattern_data: { intervals: recordedIntervals },
     });
 
     if (error) {
@@ -410,8 +410,7 @@ export default function SesionPage() {
 
     const { error } = await supabase.from("session_cards").insert({
       cult_id: profile.cult_id,
-      created_by: user.id,
-      card_type: newCardType,
+      creator_id: user.id,
       title: newCardTitle,
       description: newCardDescription || null,
     });
@@ -431,16 +430,7 @@ export default function SesionPage() {
     }
   };
 
-  const deleteCard = async (id: string, isOfficial: boolean) => {
-    if (isOfficial) {
-      toast({
-        title: "No permitido",
-        description: "No puedes eliminar tarjetas oficiales",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const deleteCard = async (id: string) => {
     const { error } = await supabase.from("session_cards").delete().eq("id", id);
 
     if (error) {
@@ -759,17 +749,6 @@ export default function SesionPage() {
                       </RitualButton>
                     ) : (
                       <form onSubmit={createCard} className="space-y-3">
-                        <select
-                          value={newCardType}
-                          onChange={(e) => setNewCardType(e.target.value)}
-                          className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                   text-foreground font-body focus:outline-none focus:border-gold/50"
-                        >
-                          <option value="action">Acción</option>
-                          <option value="position">Posición</option>
-                          <option value="indication">Indicación</option>
-                          <option value="custom">Personalizada</option>
-                        </select>
                         <input
                           value={newCardTitle}
                           onChange={(e) => setNewCardTitle(e.target.value)}
@@ -808,16 +787,9 @@ export default function SesionPage() {
                           className="flex items-start gap-2 p-3 bg-background/50 rounded-sm border border-border/30"
                         >
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-heading text-sm text-foreground truncate">
-                                {card.title}
-                              </h4>
-                              {card.is_official && (
-                                <Badge variant="outline" className="text-xs">
-                                  Oficial
-                                </Badge>
-                              )}
-                            </div>
+                            <h4 className="font-heading text-sm text-foreground truncate mb-1">
+                              {card.title}
+                            </h4>
                             {card.description && (
                               <p className="text-xs text-muted-foreground">{card.description}</p>
                             )}
@@ -830,14 +802,12 @@ export default function SesionPage() {
                             >
                               <Play className="w-4 h-4" />
                             </button>
-                            {!card.is_official && (
-                              <button
-                                onClick={() => deleteCard(card.id, card.is_official)}
-                                className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
+                            <button
+                              onClick={() => deleteCard(card.id)}
+                              className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -905,25 +875,28 @@ export default function SesionPage() {
                     )}
 
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {patterns.map((pattern) => (
-                        <div
-                          key={pattern.id}
-                          className="flex items-center justify-between p-3 bg-background/50 rounded-sm border border-border/30"
-                        >
-                          <div>
-                            <h4 className="font-heading text-sm text-foreground">{pattern.name}</h4>
-                            <p className="text-xs text-muted-foreground">
-                              {pattern.intervals.length} beats
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => deletePattern(pattern.id)}
-                            className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
+                      {patterns.map((pattern) => {
+                        const intervals = pattern.pattern_data?.intervals || [];
+                        return (
+                          <div
+                            key={pattern.id}
+                            className="flex items-center justify-between p-3 bg-background/50 rounded-sm border border-border/30"
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
+                            <div>
+                              <h4 className="font-heading text-sm text-foreground">{pattern.name}</h4>
+                              <p className="text-xs text-muted-foreground">
+                                {intervals.length} beats
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => deletePattern(pattern.id)}
+                              className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </ParchmentCard>

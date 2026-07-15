@@ -15,6 +15,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_sessions: {
+        Row: {
+          card_duration_seconds: number | null
+          card_show_timer: boolean | null
+          card_started_at: string | null
+          created_at: string | null
+          cult_id: string
+          current_card_id: string | null
+          current_rpm: number | null
+          deity_id: string
+          follower_ids: string[]
+          id: string
+          is_active: boolean | null
+          is_muted_for_deity: boolean | null
+          is_playing: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          card_duration_seconds?: number | null
+          card_show_timer?: boolean | null
+          card_started_at?: string | null
+          created_at?: string | null
+          cult_id: string
+          current_card_id?: string | null
+          current_rpm?: number | null
+          deity_id: string
+          follower_ids: string[]
+          id?: string
+          is_active?: boolean | null
+          is_muted_for_deity?: boolean | null
+          is_playing?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          card_duration_seconds?: number | null
+          card_show_timer?: boolean | null
+          card_started_at?: string | null
+          created_at?: string | null
+          cult_id?: string
+          current_card_id?: string | null
+          current_rpm?: number | null
+          deity_id?: string
+          follower_ids?: string[]
+          id?: string
+          is_active?: boolean | null
+          is_muted_for_deity?: boolean | null
+          is_playing?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "active_sessions_cult_id_fkey"
+            columns: ["cult_id"]
+            isOneToOne: false
+            referencedRelation: "cults"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assigned_punishments: {
         Row: {
           assigned_at: string | null
@@ -709,6 +768,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "rules_cult_id_fkey"
+            columns: ["cult_id"]
+            isOneToOne: false
+            referencedRelation: "cults"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_audios: {
+        Row: {
+          audio_url: string
+          created_at: string | null
+          creator_id: string
+          cult_id: string
+          duration_seconds: number
+          id: string
+          name: string
+        }
+        Insert: {
+          audio_url: string
+          created_at?: string | null
+          creator_id: string
+          cult_id: string
+          duration_seconds: number
+          id?: string
+          name: string
+        }
+        Update: {
+          audio_url?: string
+          created_at?: string | null
+          creator_id?: string
+          cult_id?: string
+          duration_seconds?: number
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_audios_cult_id_fkey"
             columns: ["cult_id"]
             isOneToOne: false
             referencedRelation: "cults"
