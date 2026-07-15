@@ -1,181 +1,128 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { CheckCircle2, Circle, Plus, Trash2, Loader2, Settings } from "lucide-react";
-import { BookPage } from "@/components/layout/BookPage";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { BookPage } from "@/components/layout/BookPage";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { RitualButton } from "@/components/ui/ritual-button";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { CheckSquare, Loader2, Upload, CheckCircle2, Clock } from "lucide-react";
 
 interface Task {
   id: string;
   title: string;
   description: string | null;
-  faith_points_reward: number;
+  faith_points: number;
   requires_evidence: boolean;
-  cult_id: string;
-  created_at: string;
-}
-
-interface AssignedTask {
-  id: string;
-  task_id: string;
-  follower_id: string;
-  assigned_by: string;
-  status: "pending" | "completed" | "verified";
-  evidence_url: string | null;
+  is_completed: boolean;
   completed_at: string | null;
-  created_at: string;
-  tasks: Task;
+  evidence_url: string | null;
 }
 
 export default function TareasPage() {
   const { profile, user } = useAuth();
   const { toast } = useToast();
-  const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [newTaskFaithPoints, setNewTaskFaithPoints] = useState(0);
-  const [showForm, setShowForm] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [uploading, setUploading] = useState<string | null>(null);
 
   useEffect(() => {
     loadTasks();
   }, [user]);
 
   const loadTasks = async () => {
-    if (!user) {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("follower_tasks")
+        .select("*")
+        .eq("follower_id", user.id)
+        .order("is_completed", { ascending: true })
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setTasks(data || []);
+    } catch (error) {
+      console.error("Error loading tasks:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las tareas",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("assigned_tasks")
-      .select("*, tasks(*)")
-      .eq("follower_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: `No se pudieron cargar las tareas: ${error.message}`,
-        variant: "destructive",
-      });
-    } else {
-      setAssignedTasks(data || []);
-    }
-    setIsLoading(false);
-  };
-
-  const toggleTaskStatus = async (assignedTask: AssignedTask) => {
-    const newStatus = assignedTask.status === "pending" ? "completed" : "pending";
-
-    const { error } = await supabase
-      .from("assigned_tasks")
-      .update({ 
-        status: newStatus,
-        completed_at: newStatus === "completed" ? new Date().toISOString() : null
-      })
-      .eq("id", assignedTask.id);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: `No se pudo actualizar: ${error.message}`,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: newStatus === "completed" ? "Tarea completada" : "Tarea reactivada",
-        description: newStatus === "completed" 
-          ? `Has completado: ${assignedTask.tasks.title}` 
-          : `Tarea marcada como pendiente`,
-      });
-      loadTasks();
     }
   };
 
-  const addTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim() || !user || !profile?.cult_id) return;
+  const uploadEvidence = async (taskId: string, file: File) => {
+    if (!user || !profile?.cult_id) return;
 
-    // Primero crear la plantilla de tarea
-    const { data: task, error: taskError } = await supabase
-      .from("tasks")
-      .insert({
-        title: newTaskTitle,
-        description: newTaskDescription || null,
-        faith_points_reward: newTaskFaithPoints,
-        requires_evidence: false,
-        cult_id: profile.cult_id,
-      })
-      .select()
-      .single();
+    setUploading(taskId);
 
-    if (taskError || !task) {
-      toast({
-        title: "Error",
-        description: `No se pudo crear la tarea: ${taskError?.message}`,
-        variant: "destructive",
-      });
-      return;
-    }
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${user.id}/${taskId}_${Date.now()}.${fileExt}`;
 
-    // Luego asignarla al usuario actual (para testing)
-    const { error: assignError } = await supabase
-      .from("assigned_tasks")
-      .insert({
-        task_id: task.id,
-        follower_id: user.id,
-        assigned_by: user.id,
-        status: "pending",
-      });
+      const { error: uploadError } = await supabase.storage
+        .from("task-evidence")
+        .upload(fileName, file);
 
-    if (assignError) {
-      toast({
-        title: "Error",
-        description: `No se pudo asignar la tarea: ${assignError.message}`,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Tarea creada",
-        description: `${newTaskTitle} ha sido asignada.`,
-      });
-      setNewTaskTitle("");
-      setNewTaskDescription("");
-      setNewTaskFaithPoints(0);
-      setShowForm(false);
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("task-evidence")
+        .getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from("follower_tasks")
+        .update({ evidence_url: urlData.publicUrl })
+        .eq("id", taskId);
+
+      if (updateError) throw updateError;
+
+      toast({ title: "Evidencia subida correctamente" });
       loadTasks();
+    } catch (error) {
+      console.error("Error uploading evidence:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo subir la evidencia",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(null);
     }
   };
 
-  const deleteTask = async (id: string) => {
-    const { error } = await supabase
-      .from("assigned_tasks")
-      .delete()
-      .eq("id", id);
+  const completeTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from("follower_tasks")
+        .update({
+          is_completed: true,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", taskId);
 
-    if (error) {
+      if (error) throw error;
+
+      toast({ title: "Tarea completada" });
+      loadTasks();
+    } catch (error) {
+      console.error("Error completing task:", error);
       toast({
         title: "Error",
-        description: `No se pudo eliminar: ${error.message}`,
+        description: "No se pudo completar la tarea",
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Tarea eliminada",
-        description: "La tarea ha sido borrada.",
-      });
-      loadTasks();
     }
   };
 
   if (isLoading) {
     return (
-      <AppLayout title="Tareas" icon={<Settings className="w-5 h-5" />}>
+      <AppLayout title="Tareas" icon={<CheckSquare className="w-5 h-5" />}>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-gold animate-spin" />
         </div>
@@ -183,171 +130,138 @@ export default function TareasPage() {
     );
   }
 
-  const pendingTasks = assignedTasks.filter(t => t.status === "pending");
-  const completedTasks = assignedTasks.filter(t => t.status === "completed");
+  const pendingTasks = tasks.filter((t) => !t.is_completed);
+  const completedTasks = tasks.filter((t) => t.is_completed);
 
   return (
-    <AppLayout title="Tareas" icon={<Settings className="w-5 h-5" />}>
+    <AppLayout title="Mis Tareas" icon={<CheckSquare className="w-5 h-5" />}>
       <BookPage pageKey="tareas">
         <div className="space-y-6">
           <div className="text-center space-y-2">
-            <h1 className="font-display text-3xl text-foreground">Mis Tareas</h1>
+            <h1 className="font-display text-3xl text-foreground">Tareas Asignadas</h1>
             <p className="font-body text-muted-foreground">
-              Asignaciones y rituales pendientes
+              {pendingTasks.length} pendiente{pendingTasks.length !== 1 ? "s" : ""}
             </p>
           </div>
 
-          {/* Tareas pendientes */}
-          <ParchmentCard title="Pendientes" icon={<Circle className="w-4 h-4" />}>
-            <div className="space-y-2">
-              {pendingTasks.length === 0 ? (
-                <p className="font-body text-sm text-muted-foreground text-center py-4">
-                  No hay tareas pendientes
-                </p>
-              ) : (
-                pendingTasks.map((assignedTask, i) => (
-                  <motion.div
-                    key={assignedTask.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="flex items-start gap-3 p-3 bg-background/50 rounded-sm border border-border/30"
+          {/* Tareas Pendientes */}
+          {pendingTasks.length > 0 && (
+            <ParchmentCard title="Por Completar" icon={<Clock className="w-4 h-4" />}>
+              <div className="space-y-3">
+                {pendingTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="p-4 bg-background/50 rounded-sm border border-border/30 space-y-3"
                   >
-                    <button
-                      onClick={() => toggleTaskStatus(assignedTask)}
-                      className="p-1 text-muted-foreground hover:text-gold transition-colors"
-                    >
-                      <Circle className="w-5 h-5" />
-                    </button>
-                    <div className="flex-1 space-y-1">
-                      <h3 className="font-heading text-sm text-foreground">{assignedTask.tasks.title}</h3>
-                      {assignedTask.tasks.description && (
-                        <p className="font-body text-xs text-muted-foreground">{assignedTask.tasks.description}</p>
-                      )}
-                      {assignedTask.tasks.faith_points_reward > 0 && (
-                        <span className="inline-block px-2 py-0.5 bg-gold/20 text-gold text-xs font-heading rounded-sm">
-                          +{assignedTask.tasks.faith_points_reward} PF
-                        </span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <h3 className="font-heading text-base text-foreground mb-1">
+                          {task.title}
+                        </h3>
+                        {task.description && (
+                          <p className="font-body text-sm text-muted-foreground">
+                            {task.description}
+                          </p>
+                        )}
+                      </div>
+                      {task.faith_points > 0 && (
+                        <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
+                          +{task.faith_points} PF
+                        </Badge>
                       )}
                     </div>
-                    <button
-                      onClick={() => deleteTask(assignedTask.id)}
-                      className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </ParchmentCard>
 
-          {/* Tareas completadas */}
-          {completedTasks.length > 0 && (
-            <ParchmentCard title="Completadas" icon={<CheckCircle2 className="w-4 h-4" />}>
-              <div className="space-y-2">
-                {completedTasks.map((assignedTask, i) => (
-                  <motion.div
-                    key={assignedTask.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="flex items-start gap-3 p-3 bg-background/30 rounded-sm border border-border/20 opacity-60"
-                  >
-                    <button
-                      onClick={() => toggleTaskStatus(assignedTask)}
-                      className="p-1 text-gold"
-                    >
-                      <CheckCircle2 className="w-5 h-5" />
-                    </button>
-                    <div className="flex-1 space-y-1">
-                      <h3 className="font-heading text-sm text-foreground line-through">{assignedTask.tasks.title}</h3>
-                      {assignedTask.tasks.faith_points_reward > 0 && (
-                        <span className="inline-block px-2 py-0.5 bg-gold/20 text-gold text-xs font-heading rounded-sm">
-                          +{assignedTask.tasks.faith_points_reward} PF
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => deleteTask(assignedTask.id)}
-                      className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </motion.div>
+                    {task.requires_evidence && !task.evidence_url && (
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer w-full">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) uploadEvidence(task.id, file);
+                            }}
+                            className="hidden"
+                            disabled={uploading === task.id}
+                          />
+                          <RitualButton
+                            variant="outline"
+                            className="w-full"
+                            disabled={uploading === task.id}
+                            as="div"
+                          >
+                            <Upload className="w-4 h-4 mr-2" />
+                            {uploading === task.id ? "Subiendo..." : "Subir Evidencia"}
+                          </RitualButton>
+                        </label>
+                        <p className="text-xs text-muted-foreground text-center">
+                          Esta tarea requiere evidencia fotográfica
+                        </p>
+                      </div>
+                    )}
+
+                    {task.evidence_url && (
+                      <div className="text-center">
+                        <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
+                          Evidencia subida
+                        </Badge>
+                      </div>
+                    )}
+
+                    {(!task.requires_evidence || task.evidence_url) && (
+                      <RitualButton
+                        variant="gold"
+                        onClick={() => completeTask(task.id)}
+                        className="w-full"
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Marcar como Completada
+                      </RitualButton>
+                    )}
+                  </div>
                 ))}
               </div>
             </ParchmentCard>
           )}
 
-          {/* Formulario para agregar tarea (solo para deidades) */}
-          {profile?.role === "deity" && (
-            <ParchmentCard title="Nueva Tarea" icon={<Plus className="w-4 h-4" />}>
-              {!showForm ? (
-                <RitualButton
-                  variant="outline"
-                  onClick={() => setShowForm(true)}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Crear Tarea
-                </RitualButton>
-              ) : (
-                <form onSubmit={addTask} className="space-y-4">
-                  <div>
-                    <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
-                      Título
-                    </label>
-                    <input
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      required
-                      placeholder="Ej: Meditar 10 minutos"
-                      className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                 text-foreground font-body focus:outline-none focus:border-gold/50"
-                    />
+          {/* Tareas Completadas */}
+          {completedTasks.length > 0 && (
+            <ParchmentCard title="Completadas" icon={<CheckCircle2 className="w-4 h-4" />}>
+              <div className="space-y-2">
+                {completedTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="p-3 bg-background/50 rounded-sm border border-border/30 opacity-60"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <h3 className="font-heading text-sm text-foreground line-through">
+                          {task.title}
+                        </h3>
+                        {task.completed_at && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Completada: {new Date(task.completed_at).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                      {task.faith_points > 0 && (
+                        <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
+                          +{task.faith_points} PF
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
-                      Descripción (opcional)
-                    </label>
-                    <textarea
-                      value={newTaskDescription}
-                      onChange={(e) => setNewTaskDescription(e.target.value)}
-                      placeholder="Detalles adicionales..."
-                      rows={2}
-                      className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                 text-foreground font-body focus:outline-none focus:border-gold/50 resize-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
-                      Puntos de Fe
-                    </label>
-                    <input
-                      type="number"
-                      value={newTaskFaithPoints}
-                      onChange={(e) => setNewTaskFaithPoints(parseInt(e.target.value) || 0)}
-                      min={0}
-                      className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                                 text-foreground font-body focus:outline-none focus:border-gold/50"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <RitualButton type="submit" variant="gold" className="flex-1">
-                      Guardar
-                    </RitualButton>
-                    <button
-                      type="button"
-                      onClick={() => setShowForm(false)}
-                      className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </form>
-              )}
+                ))}
+              </div>
             </ParchmentCard>
+          )}
+
+          {tasks.length === 0 && (
+            <div className="text-center py-12">
+              <p className="font-body text-muted-foreground">
+                No tienes tareas asignadas
+              </p>
+            </div>
           )}
         </div>
       </BookPage>

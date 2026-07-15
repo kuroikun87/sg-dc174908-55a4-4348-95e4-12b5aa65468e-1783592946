@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { ParchmentCard } from "@/components/ui/parchment-card";
-import { Crown, Heart, Scroll, Users, Star, Settings, LogOut, Loader2, Key, Shield, Sparkles, Gift, AlertTriangle, BookOpen } from "lucide-react";
+import { Crown, Heart, Scroll, Users, Star, Settings, LogOut, Loader2, Key, Shield, Sparkles, Gift, AlertTriangle, BookOpen, CheckSquare } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
@@ -111,7 +111,9 @@ function FollowerMenu() {
     { icon: <Scroll className="w-5 h-5" />, title: "Reglas", desc: "Leyes y mandamientos", href: "/dashboard/reglas" },
     { icon: <Users className="w-5 h-5" />, title: "Mi Perfil", desc: "Datos personales y rango", href: "/dashboard/perfil" },
     { icon: <Sparkles className="w-5 h-5" />, title: "Puntos de Fe", desc: "Mi progreso espiritual", href: "/dashboard/puntos-fe" },
-    { icon: <Sparkles className="w-5 h-5" />, title: "Recompensas", desc: "Tareas, premios y consecuencias", href: "/dashboard/recompensas" },
+    { icon: <CheckSquare className="w-5 h-5" />, title: "Tareas", desc: "Mis tareas asignadas", href: "/dashboard/tareas" },
+    { icon: <Gift className="w-5 h-5" />, title: "Mis Premios", desc: "Recompensas y tienda", href: "/dashboard/mis-premios" },
+    { icon: <AlertTriangle className="w-5 h-5" />, title: "Consecuencias", desc: "Por cumplir y cumplidas", href: "/dashboard/mis-consecuencias" },
     { icon: <Star className="w-5 h-5" />, title: "Almanaque", desc: "Calendario infinito", href: "/dashboard/almanaque" },
     { icon: <Heart className="w-5 h-5" />, title: "Fetiches", desc: "Marcar prácticas", href: "/dashboard/fetiches" },
     { icon: <Settings className="w-5 h-5" />, title: "Sesión", desc: "Beats y control", href: "/dashboard/sesion" },
