@@ -200,12 +200,15 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         .order("assigned_at", { ascending: false });
       setFollowerPunishments(punishmentsData || []);
 
-      const { data: eventsData } = await supabase
+      const { data: eventsData, error: eventsError } = await supabase
         .from("calendar_events")
         .select("*")
         .eq("user_id", memberId)
         .order("event_date", { ascending: true })
         .order("event_time", { ascending: true, nullsFirst: false });
+      
+      console.log("Eventos cargados para memberId:", memberId, eventsData);
+      if (eventsError) console.error("Error cargando eventos:", eventsError);
       setEvents(eventsData || []);
 
       const { data: fetishesData } = await supabase
@@ -449,15 +452,16 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         toast({ title: "Evento actualizado" });
       } else {
         // Crear nuevo evento
-        const { error } = await supabase.from("calendar_events").insert({
+        const { data, error } = await supabase.from("calendar_events").insert({
           user_id: memberId,
           title: eventForm.title,
           event_type: "event",
           event_date: eventForm.date,
           event_time: eventForm.time || null,
           created_by: user?.id,
-        });
+        }).select();
 
+        console.log("Evento creado:", data, "Error:", error);
         if (error) throw error;
         toast({ title: "Evento creado" });
       }
@@ -465,7 +469,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       setShowEventForm(false);
       setEditingEvent(null);
       setEventForm({ title: "", date: "", time: "" });
-      loadMemberData();
+      await loadMemberData();
     } catch (error) {
       console.error("Error saving event:", error);
       toast({
@@ -532,7 +536,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const getEventsForDay = (date: Date | null) => {
     if (!date) return [];
     const dateStr = date.toISOString().split("T")[0];
-    return events.filter((event) => event.event_date === dateStr);
+    const dayEvents = events.filter((event) => event.event_date === dateStr);
+    console.log("getEventsForDay:", dateStr, "eventos encontrados:", dayEvents.length, dayEvents);
+    return dayEvents;
   };
 
   const isSameDay = (date1: Date | null, date2: Date | null) => {
