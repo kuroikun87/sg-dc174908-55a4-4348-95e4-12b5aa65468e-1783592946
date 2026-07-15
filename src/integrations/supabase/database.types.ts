@@ -30,6 +30,7 @@ export type Database = {
           is_active: boolean | null
           is_muted_for_deity: boolean | null
           is_playing: boolean | null
+          manual_beat_trigger: string | null
           updated_at: string | null
         }
         Insert: {
@@ -46,6 +47,7 @@ export type Database = {
           is_active?: boolean | null
           is_muted_for_deity?: boolean | null
           is_playing?: boolean | null
+          manual_beat_trigger?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -62,6 +64,7 @@ export type Database = {
           is_active?: boolean | null
           is_muted_for_deity?: boolean | null
           is_playing?: boolean | null
+          manual_beat_trigger?: string | null
           updated_at?: string | null
         }
         Relationships: [

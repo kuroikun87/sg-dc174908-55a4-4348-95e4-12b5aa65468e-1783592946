@@ -70,6 +70,7 @@ interface ActiveSession {
   card_duration_seconds: number | null;
   card_show_timer: boolean;
   card_started_at: string | null;
+  manual_beat_trigger: string | null;
 }
 
 interface Follower {
@@ -191,10 +192,29 @@ export default function SesionPage() {
         (payload) => {
           if (payload.eventType === "UPDATE") {
             const updated = payload.new as ActiveSession;
-            setRpm(updated.current_rpm);
-            setIsPlaying(updated.is_playing);
-            if (isDeity) {
+            
+            // Actualizar RPM
+            if (updated.current_rpm !== rpm) {
+              setRpm(updated.current_rpm);
+            }
+            
+            // Actualizar play/pause
+            if (updated.is_playing !== isPlaying) {
+              setIsPlaying(updated.is_playing);
+            }
+            
+            // Actualizar mute (solo deidades)
+            if (isDeity && updated.is_muted_for_deity !== isMuted) {
               setIsMuted(updated.is_muted_for_deity);
+            }
+            
+            // Reproducir beat manual (solo fieles)
+            if (!isDeity && updated.manual_beat_trigger) {
+              const oldTrigger = activeSession.manual_beat_trigger;
+              if (oldTrigger !== updated.manual_beat_trigger) {
+                playBeat();
+                animateBeatCircle();
+              }
             }
             
             // Actualizar tarjeta activa
@@ -204,13 +224,24 @@ export default function SesionPage() {
                 setActiveCard(card);
                 setCardDuration(updated.card_duration_seconds);
                 setShowTimer(updated.card_show_timer);
-                setCardTimeLeft(updated.card_duration_seconds);
+                
+                // Calcular tiempo restante
+                if (updated.card_duration_seconds && updated.card_started_at) {
+                  const elapsed = Math.floor((Date.now() - new Date(updated.card_started_at).getTime()) / 1000);
+                  const remaining = updated.card_duration_seconds - elapsed;
+                  setCardTimeLeft(remaining > 0 ? remaining : 0);
+                } else {
+                  setCardTimeLeft(updated.card_duration_seconds);
+                }
               }
-            } else if (!updated.current_card_id) {
+            } else if (!updated.current_card_id && activeCard) {
               setActiveCard(null);
               setCardDuration(null);
               setCardTimeLeft(null);
             }
+            
+            // Actualizar referencia local de activeSession
+            setActiveSession(updated);
           }
         }
       )
@@ -219,7 +250,7 @@ export default function SesionPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeSession, isDeity, cards]);
+  }, [activeSession?.id, isDeity]);
 
   const loadData = async () => {
     if (!user || !profile?.cult_id) {
@@ -383,9 +414,20 @@ export default function SesionPage() {
     }
   };
 
-  const manualBeat = () => {
+  const manualBeat = async () => {
     playBeat();
     animateBeatCircle();
+
+    // Sincronizar beat manual con fieles (solo deidades)
+    if (activeSession && isDeity) {
+      await supabase
+        .from("active_sessions")
+        .update({
+          manual_beat_trigger: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", activeSession.id);
+    }
 
     if (isRecording) {
       const now = Date.now();
