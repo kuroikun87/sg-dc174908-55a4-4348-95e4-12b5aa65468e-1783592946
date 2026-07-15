@@ -9,8 +9,8 @@ interface SEOProps {
 
 // SEO elements that can be used in _document.tsx (returns JSX without Head wrapper)
 export function SEOElements({
-  title = "Hello World",
-  description = "Welcome to my app",
+  title = "Códice Oscuro — Grimorio Ritual BDSM",
+  description = "Grimorio ritual para quienes abrazan la oscuridad y encuentran poder en la entrega consensuada. Gestión de cultos, jerarquías y dinámicas D/s.",
   image = "/og-image.png",
   url,
 }: SEOProps) {
@@ -39,8 +39,8 @@ export function SEOElements({
 // SEO component for use in pages/_app.tsx or individual pages (uses next/head)
 // Note: Flattened structure (no fragment) for better Next.js Head compatibility during hot reload
 export function SEO({
-  title = "Hello World",
-  description = "Welcome to my app",
+  title = "Códice Oscuro — Grimorio Ritual BDSM",
+  description = "Grimorio ritual para quienes abrazan la oscuridad y encuentran poder en la entrega consensuada. Gestión de cultos, jerarquías y dinámicas D/s.",
   image = "/og-image.png",
   url,
 }: SEOProps) {

@@ -1,11 +1,11 @@
 ---
-title: El Grimorio de la Casa Nocturna
+title: Códice Oscuro
 created_at: 2026-07-09T04:23:16Z
 ---
 
 ## Vision
 
-Una aplicación de gestión de culto/jerarquía BDSM con estética de grimorio gótico oscuro y elegante. Dos roles principales: Deidad (dominante/administrador) y Fiel (sumiso/miembro). La navegación simula un libro interactivo con animaciones suaves y detalles visuales discretos.
+Códice Oscuro es una aplicación de gestión de cultos y jerarquías BDSM con estética de grimorio gótico oscuro y elegante. Dos roles principales: Deidad (dominante/administrador) y Fiel (sumiso/miembro). La navegación simula un libro interactivo con animaciones suaves y detalles visuales discretos.
 
 ## Design
 
@@ -26,9 +26,10 @@ Una aplicación de gestión de culto/jerarquía BDSM con estética de grimorio g
 
 ## Features
 
-- Autenticación dual (Deidad/Fiel)
+- Autenticación dual (Deidad/Fiel) con verificación +18
 - Gestión de culto (nombre, imagen, presentación)
 - Jerarquía piramidal de deidades y fieles
+- Sistema de códigos de invitación permanentes
 - Rangos con niveles
 - Reglas, leyes, mandamientos, oraciones
 - Premios, consecuencias y tareas con puntos de fe
