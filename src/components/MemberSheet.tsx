@@ -158,25 +158,28 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       if (profileError) throw profileError;
       setMember(profileData);
 
+      // Cargar tareas asignadas con JOIN
       const { data: tasksData } = await supabase
-        .from("follower_tasks")
-        .select("*")
+        .from("assigned_tasks")
+        .select("*, tasks(*)")
         .eq("follower_id", memberId)
         .order("created_at", { ascending: false });
       setFollowerTasks(tasksData || []);
 
+      // Cargar premios asignados con JOIN
       const { data: rewardsData } = await supabase
-        .from("follower_rewards")
-        .select("*")
+        .from("awarded_rewards")
+        .select("*, rewards(*)")
         .eq("follower_id", memberId)
-        .order("created_at", { ascending: false });
+        .order("awarded_at", { ascending: false });
       setFollowerRewards(rewardsData || []);
 
+      // Cargar consecuencias asignadas con JOIN
       const { data: punishmentsData } = await supabase
-        .from("follower_punishments")
-        .select("*")
+        .from("assigned_punishments")
+        .select("*, punishments(*)")
         .eq("follower_id", memberId)
-        .order("created_at", { ascending: false });
+        .order("assigned_at", { ascending: false });
       setFollowerPunishments(punishmentsData || []);
 
       const { data: eventsData } = await supabase
@@ -189,7 +192,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       setEvents(eventsData || []);
 
       const { data: fetishesData } = await supabase
-        .from("user_fetishes")
+        .from("fetish_ratings")
         .select("*, fetishes(*)")
         .eq("user_id", memberId);
       setFetishes(fetishesData || []);
@@ -197,7 +200,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       const { data: faithData } = await supabase
         .from("faith_points_log")
         .select("*")
-        .eq("follower_id", memberId)
+        .eq("user_id", memberId)
         .order("created_at", { ascending: false })
         .limit(10);
       setFaithLog(faithData || []);
@@ -218,16 +221,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!memberId || !profile?.cult_id) return;
 
     try {
-      const { error } = await supabase.from("follower_tasks").insert({
-        follower_id: memberId,
-        cult_id: profile.cult_id,
+      const { error } = await supabase.from("assigned_tasks").insert({
         task_id: task.id,
-        task_title: task.title,
-        task_description: task.description,
-        faith_points_reward: task.faith_points_reward,
-        requires_evidence: task.requires_evidence,
-        is_custom: false,
+        follower_id: memberId,
         assigned_by: user?.id,
+        status: "pending",
       });
 
       if (error) throw error;
@@ -247,19 +245,31 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!memberId || !profile?.cult_id || !customTaskForm.title.trim()) return;
 
     try {
-      const { error } = await supabase.from("follower_tasks").insert({
+      // Primero crear la tarea en tasks
+      const { data: newTask, error: createError } = await supabase
+        .from("tasks")
+        .insert({
+          cult_id: profile.cult_id,
+          title: customTaskForm.title,
+          description: customTaskForm.description || null,
+          faith_points_reward: customTaskForm.faith_points,
+          requires_evidence: customTaskForm.requires_evidence,
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Luego asignarla en assigned_tasks
+      const { error: assignError } = await supabase.from("assigned_tasks").insert({
+        task_id: newTask.id,
         follower_id: memberId,
-        cult_id: profile.cult_id,
-        task_id: null,
-        task_title: customTaskForm.title,
-        task_description: customTaskForm.description || null,
-        faith_points_reward: customTaskForm.faith_points,
-        requires_evidence: customTaskForm.requires_evidence,
-        is_custom: true,
         assigned_by: user?.id,
+        status: "pending",
       });
 
-      if (error) throw error;
+      if (assignError) throw assignError;
+
       toast({ title: "Tarea personalizada asignada" });
       setCustomTaskForm({ title: "", description: "", faith_points: 0, requires_evidence: false });
       loadMemberData();
@@ -277,14 +287,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!memberId || !profile?.cult_id) return;
 
     try {
-      const { error } = await supabase.from("follower_rewards").insert({
-        follower_id: memberId,
-        cult_id: profile.cult_id,
+      const { error } = await supabase.from("awarded_rewards").insert({
         reward_id: reward.id,
-        reward_name: reward.name,
-        reward_description: reward.description,
-        is_custom: false,
-        given_by: user?.id,
+        follower_id: memberId,
+        awarded_by: user?.id,
+        is_redeemed: false,
       });
 
       if (error) throw error;
@@ -304,17 +311,30 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!memberId || !profile?.cult_id || !customRewardForm.name.trim()) return;
 
     try {
-      const { error } = await supabase.from("follower_rewards").insert({
+      // Primero crear el premio en rewards
+      const { data: newReward, error: createError } = await supabase
+        .from("rewards")
+        .insert({
+          cult_id: profile.cult_id,
+          name: customRewardForm.name,
+          description: customRewardForm.description || null,
+          faith_points_cost: 0,
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Luego asignarlo en awarded_rewards
+      const { error: assignError } = await supabase.from("awarded_rewards").insert({
+        reward_id: newReward.id,
         follower_id: memberId,
-        cult_id: profile.cult_id,
-        reward_id: null,
-        reward_name: customRewardForm.name,
-        reward_description: customRewardForm.description || null,
-        is_custom: true,
-        given_by: user?.id,
+        awarded_by: user?.id,
+        is_redeemed: false,
       });
 
-      if (error) throw error;
+      if (assignError) throw assignError;
+
       toast({ title: "Premio personalizado asignado" });
       setCustomRewardForm({ name: "", description: "" });
       loadMemberData();
@@ -332,15 +352,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!memberId || !profile?.cult_id) return;
 
     try {
-      const { error } = await supabase.from("follower_punishments").insert({
-        follower_id: memberId,
-        cult_id: profile.cult_id,
+      const { error } = await supabase.from("assigned_punishments").insert({
         punishment_id: punishment.id,
-        punishment_name: punishment.name,
-        punishment_description: punishment.description,
-        faith_points_cost: punishment.faith_points_cost,
-        is_custom: false,
+        follower_id: memberId,
         assigned_by: user?.id,
+        is_removed: false,
       });
 
       if (error) throw error;
@@ -360,18 +376,30 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!memberId || !profile?.cult_id || !customPunishmentForm.name.trim()) return;
 
     try {
-      const { error } = await supabase.from("follower_punishments").insert({
+      // Primero crear la consecuencia en punishments
+      const { data: newPunishment, error: createError } = await supabase
+        .from("punishments")
+        .insert({
+          cult_id: profile.cult_id,
+          name: customPunishmentForm.name,
+          description: customPunishmentForm.description || null,
+          faith_points_cost: customPunishmentForm.faith_points,
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Luego asignarla en assigned_punishments
+      const { error: assignError } = await supabase.from("assigned_punishments").insert({
+        punishment_id: newPunishment.id,
         follower_id: memberId,
-        cult_id: profile.cult_id,
-        punishment_id: null,
-        punishment_name: customPunishmentForm.name,
-        punishment_description: customPunishmentForm.description || null,
-        faith_points_cost: customPunishmentForm.faith_points,
-        is_custom: true,
         assigned_by: user?.id,
+        is_removed: false,
       });
 
-      if (error) throw error;
+      if (assignError) throw assignError;
+
       toast({ title: "Consecuencia personalizada asignada" });
       setCustomPunishmentForm({ name: "", description: "", faith_points: 0 });
       loadMemberData();
@@ -567,30 +595,30 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {followerTasks.map((ft) => (
-                        <div key={ft.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
+                      {followerTasks.map((at) => (
+                        <div key={at.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <p className="font-heading text-sm text-foreground">{ft.task_title}</p>
-                              {ft.task_description && (
-                                <p className="text-xs text-muted-foreground mt-1">{ft.task_description}</p>
+                              <p className="font-heading text-sm text-foreground">{at.tasks?.title || "Tarea eliminada"}</p>
+                              {at.tasks?.description && (
+                                <p className="text-xs text-muted-foreground mt-1">{at.tasks.description}</p>
                               )}
                               <div className="flex gap-2 mt-2">
-                                <Badge variant={ft.is_completed ? "default" : "outline"} className="text-xs">
-                                  {ft.is_completed ? "Completada" : "Pendiente"}
+                                <Badge variant={at.status === "completed" ? "default" : "outline"} className="text-xs">
+                                  {at.status === "completed" ? "Completada" : at.status === "verified" ? "Verificada" : "Pendiente"}
                                 </Badge>
-                                {ft.faith_points_reward > 0 && (
+                                {at.tasks?.faith_points_reward > 0 && (
                                   <Badge variant="outline" className="text-xs bg-gold/10 text-gold">
-                                    +{ft.faith_points_reward} PF
+                                    +{at.tasks.faith_points_reward} PF
                                   </Badge>
                                 )}
                               </div>
                             </div>
-                            {isDeity && !ft.is_completed && (
+                            {isDeity && at.status === "pending" && (
                               <button
                                 onClick={() => {
                                   if (confirm("¿Eliminar esta tarea?")) {
-                                    supabase.from("follower_tasks").delete().eq("id", ft.id).then(() => {
+                                    supabase.from("assigned_tasks").delete().eq("id", at.id).then(() => {
                                       toast({ title: "Tarea eliminada" });
                                       loadMemberData();
                                     });
@@ -727,23 +755,23 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         </p>
                       ) : (
                         <div className="space-y-2">
-                          {followerRewards.map((fr) => (
-                            <div key={fr.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
+                          {followerRewards.map((ar) => (
+                            <div key={ar.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
-                                  <p className="font-heading text-sm text-foreground">{fr.reward_name}</p>
-                                  {fr.reward_description && (
-                                    <p className="text-xs text-muted-foreground mt-1">{fr.reward_description}</p>
+                                  <p className="font-heading text-sm text-foreground">{ar.rewards?.name || "Premio eliminado"}</p>
+                                  {ar.rewards?.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{ar.rewards.description}</p>
                                   )}
-                                  <Badge variant={fr.is_used ? "outline" : "default"} className="text-xs mt-2">
-                                    {fr.is_used ? "Utilizado" : "Disponible"}
+                                  <Badge variant={ar.is_redeemed ? "outline" : "default"} className="text-xs mt-2">
+                                    {ar.is_redeemed ? "Utilizado" : "Disponible"}
                                   </Badge>
                                 </div>
-                                {!fr.is_used && (
+                                {!ar.is_redeemed && (
                                   <button
                                     onClick={() => {
                                       if (confirm("¿Eliminar este premio?")) {
-                                        supabase.from("follower_rewards").delete().eq("id", fr.id).then(() => {
+                                        supabase.from("awarded_rewards").delete().eq("id", ar.id).then(() => {
                                           toast({ title: "Premio eliminado" });
                                           loadMemberData();
                                         });
@@ -858,30 +886,30 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         </p>
                       ) : (
                         <div className="space-y-2">
-                          {followerPunishments.map((fp) => (
-                            <div key={fp.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
+                          {followerPunishments.map((ap) => (
+                            <div key={ap.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
-                                  <p className="font-heading text-sm text-foreground">{fp.punishment_name}</p>
-                                  {fp.punishment_description && (
-                                    <p className="text-xs text-muted-foreground mt-1">{fp.punishment_description}</p>
+                                  <p className="font-heading text-sm text-foreground">{ap.punishments?.name || "Consecuencia eliminada"}</p>
+                                  {ap.punishments?.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{ap.punishments.description}</p>
                                   )}
                                   <div className="flex gap-2 mt-2">
-                                    <Badge variant={fp.is_completed ? "default" : "outline"} className="text-xs">
-                                      {fp.is_completed ? "Cumplida" : "Activa"}
+                                    <Badge variant={ap.is_removed ? "outline" : "default"} className="text-xs">
+                                      {ap.is_removed ? "Cumplida" : "Activa"}
                                     </Badge>
-                                    {fp.faith_points_cost > 0 && (
+                                    {ap.punishments?.faith_points_cost > 0 && (
                                       <Badge variant="outline" className="text-xs bg-wine/20 text-wine">
-                                        {fp.faith_points_cost} PF para quitar
+                                        {ap.punishments.faith_points_cost} PF para quitar
                                       </Badge>
                                     )}
                                   </div>
                                 </div>
-                                {!fp.is_completed && (
+                                {!ap.is_removed && (
                                   <button
                                     onClick={() => {
                                       if (confirm("¿Eliminar esta consecuencia?")) {
-                                        supabase.from("follower_punishments").delete().eq("id", fp.id).then(() => {
+                                        supabase.from("assigned_punishments").delete().eq("id", ap.id).then(() => {
                                           toast({ title: "Consecuencia eliminada" });
                                           loadMemberData();
                                         });
