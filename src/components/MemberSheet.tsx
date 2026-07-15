@@ -21,11 +21,19 @@ import {
   Sparkles,
   Heart,
   Calendar,
+  Gift,
+  AlertTriangle,
+  Settings,
   Crown,
   Loader2,
   Star,
+  Circle,
+  CheckCircle2,
+  Clock,
   Plus,
+  CheckSquare,
   Trash2,
+  Edit,
 } from "lucide-react";
 
 interface MemberSheetProps {
@@ -115,6 +123,15 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     faith_points: 0,
   });
 
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<any | null>(null);
+  const [eventForm, setEventForm] = useState({
+    title: "",
+    date: "",
+    time: "",
+    notes: "",
+  });
+
   const isDeity = profile?.role === "deity";
 
   useEffect(() => {
@@ -186,9 +203,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         .from("calendar_events")
         .select("*")
         .eq("user_id", memberId)
-        .gte("event_date", new Date().toISOString())
         .order("event_date", { ascending: true })
-        .limit(5);
+        .order("event_time", { ascending: true, nullsFirst: false });
       setEvents(eventsData || []);
 
       const { data: fetishesData } = await supabase
@@ -408,6 +424,75 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       toast({
         title: "Error",
         description: "No se pudo asignar la consecuencia personalizada",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const saveEvent = async () => {
+    if (!memberId || !profile?.cult_id || !eventForm.title.trim() || !eventForm.date) return;
+
+    try {
+      if (editingEvent) {
+        // Actualizar evento existente
+        const { error } = await supabase
+          .from("calendar_events")
+          .update({
+            title: eventForm.title,
+            event_date: eventForm.date,
+            event_time: eventForm.time || null,
+            notes: eventForm.notes || null,
+          })
+          .eq("id", editingEvent.id);
+
+        if (error) throw error;
+        toast({ title: "Evento actualizado" });
+      } else {
+        // Crear nuevo evento
+        const { error } = await supabase.from("calendar_events").insert({
+          user_id: memberId,
+          title: eventForm.title,
+          event_date: eventForm.date,
+          event_time: eventForm.time || null,
+          notes: eventForm.notes || null,
+          created_by: user?.id,
+        });
+
+        if (error) throw error;
+        toast({ title: "Evento creado" });
+      }
+
+      setShowEventForm(false);
+      setEditingEvent(null);
+      setEventForm({ title: "", date: "", time: "", notes: "" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error saving event:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo guardar el evento",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteEvent = async (eventId: string) => {
+    if (!confirm("¿Eliminar este evento?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("calendar_events")
+        .delete()
+        .eq("id", eventId);
+
+      if (error) throw error;
+      toast({ title: "Evento eliminado" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el evento",
         variant: "destructive",
       });
     }
@@ -1018,6 +1103,142 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         </div>
                       )}
                     </div>
+
+                    {/* Calendario */}
+                    {isDeity && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-gold" />
+                            <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Calendario</h3>
+                          </div>
+                          <button
+                            onClick={() => setShowEventForm(!showEventForm)}
+                            className="text-xs text-gold hover:text-gold/80 transition-colors"
+                          >
+                            {showEventForm ? "Cancelar" : "+ Nuevo Evento"}
+                          </button>
+                        </div>
+
+                        {/* Formulario para crear evento */}
+                        {showEventForm && (
+                          <div className="p-3 bg-background/50 rounded-sm border border-gold/30 space-y-3">
+                            <Input
+                              placeholder="Título del evento"
+                              value={eventForm.title}
+                              onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                            />
+                            <Input
+                              type="date"
+                              value={eventForm.date}
+                              onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                            />
+                            <Input
+                              type="time"
+                              placeholder="Hora (opcional)"
+                              value={eventForm.time}
+                              onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+                            />
+                            <Textarea
+                              placeholder="Notas (opcional)"
+                              value={eventForm.notes}
+                              onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
+                              rows={2}
+                            />
+                            <div className="flex gap-2">
+                              <RitualButton
+                                variant="gold"
+                                onClick={saveEvent}
+                                disabled={!eventForm.title.trim() || !eventForm.date}
+                                className="flex-1"
+                              >
+                                {editingEvent ? "Actualizar" : "Crear Evento"}
+                              </RitualButton>
+                              {editingEvent && (
+                                <RitualButton
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingEvent(null);
+                                    setEventForm({ title: "", date: "", time: "", notes: "" });
+                                  }}
+                                >
+                                  Cancelar
+                                </RitualButton>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Lista de eventos */}
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                          {events.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No hay eventos en el calendario
+                            </p>
+                          ) : (
+                            events.map((event) => {
+                              const isDeityEvent = event.created_by !== memberId;
+                              return (
+                                <div
+                                  key={event.id}
+                                  className={`
+                                    p-3 bg-background/50 rounded-sm space-y-2
+                                    ${isDeityEvent ? "border-2 border-gold/60" : "border border-border/30"}
+                                  `}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="font-heading text-sm text-foreground">
+                                          {event.title}
+                                        </h4>
+                                        {isDeityEvent && (
+                                          <Badge variant="outline" className="text-xs bg-gold/10 text-gold border-gold/30">
+                                            Deidad
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        {new Date(event.event_date).toLocaleDateString()}
+                                        {event.event_time && ` - ${event.event_time}`}
+                                      </p>
+                                      {event.notes && (
+                                        <p className="text-xs text-muted-foreground mt-1">{event.notes}</p>
+                                      )}
+                                    </div>
+                                    {isDeityEvent && (
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() => {
+                                            setEditingEvent(event);
+                                            setEventForm({
+                                              title: event.title,
+                                              date: event.event_date,
+                                              time: event.event_time || "",
+                                              notes: event.notes || "",
+                                            });
+                                            setShowEventForm(true);
+                                          }}
+                                          className="p-1.5 text-gold hover:text-gold/80 transition-colors"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => deleteEvent(event.id)}
+                                          className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </TabsContent>
