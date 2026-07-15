@@ -143,7 +143,7 @@ export default function MisPremiosPage() {
     }
   };
 
-  const useReward = async (rewardId: string) => {
+  const handleUseReward = async (rewardId: string) => {
     try {
       const { error } = await supabase
         .from("follower_rewards")
@@ -232,7 +232,7 @@ export default function MisPremiosPage() {
 
                     <RitualButton
                       variant="outline"
-                      onClick={() => useReward(reward.id)}
+                      onClick={() => handleUseReward(reward.id)}
                       className="w-full"
                     >
                       <Check className="w-4 h-4 mr-2" />
