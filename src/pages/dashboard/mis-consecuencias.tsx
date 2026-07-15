@@ -5,24 +5,15 @@ import { supabase } from "@/lib/supabase";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { BookPage } from "@/components/layout/BookPage";
 import { ParchmentCard } from "@/components/ui/parchment-card";
+import { RitualButton } from "@/components/ui/ritual-button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Loader2, CheckCircle2, Clock, Sparkles } from "lucide-react";
-
-interface Consequence {
-  id: string;
-  title: string;
-  description: string | null;
-  faith_points: number;
-  is_fulfilled: boolean;
-  fulfilled_at: string | null;
-  deity_note: string | null;
-}
+import { AlertTriangle, Loader2, CheckCircle2, Sparkles } from "lucide-react";
 
 export default function MisConsecuenciasPage() {
   const { profile, user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
-  const [consequences, setConsequences] = useState<Consequence[]>([]);
+  const [consequences, setConsequences] = useState<any[]>([]);
 
   useEffect(() => {
     loadConsequences();
@@ -186,7 +177,7 @@ export default function MisConsecuenciasPage() {
 
           {/* Consecuencias Cumplidas */}
           {completedConsequences.length > 0 && (
-            <ParchmentCard title="Cumplidas" icon={<CheckCircle className="w-4 h-4" />}>
+            <ParchmentCard title="Cumplidas" icon={<CheckCircle2 className="w-4 h-4" />}>
               <div className="space-y-2">
                 {completedConsequences.map((ap) => {
                   const punishment = ap.punishments;
