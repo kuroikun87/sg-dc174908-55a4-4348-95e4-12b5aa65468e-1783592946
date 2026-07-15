@@ -27,8 +27,6 @@ export default function JerarquiaPage() {
   const [deities, setDeities] = useState<HierarchyPerson[]>([]);
   const [followers, setFollowers] = useState<HierarchyPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedMember, setSelectedMember] = useState<HierarchyPerson | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -127,30 +125,6 @@ export default function JerarquiaPage() {
     }
   };
 
-  const loadMembers = async () => {
-    if (!profile?.cult_id) {
-      setIsLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*, ranks(name, level)")
-      .eq("cult_id", profile.cult_id)
-      .order("role", { ascending: false });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: `No se pudo cargar la jerarquía: ${error.message}`,
-        variant: "destructive",
-      });
-    } else {
-      setMembers(data || []);
-    }
-    setIsLoading(false);
-  };
-
   const openMemberSheet = (memberId: string) => {
     setSelectedMemberId(memberId);
     setIsSheetOpen(true);
@@ -211,9 +185,6 @@ export default function JerarquiaPage() {
       </AppLayout>
     );
   }
-
-  const deities = members.filter((m) => m.role === "deity");
-  const followers = members.filter((m) => m.role === "follower");
 
   return (
     <>
@@ -365,9 +336,9 @@ export default function JerarquiaPage() {
                               <p className="font-body text-xs text-muted-foreground truncate">
                                 {member.title || "Sin título"}
                               </p>
-                              {member.ranks && (
+                              {member.rank_name && (
                                 <span className="text-xs text-gold">
-                                  · {member.ranks.name}
+                                  · {member.rank_name}
                                 </span>
                               )}
                             </div>
