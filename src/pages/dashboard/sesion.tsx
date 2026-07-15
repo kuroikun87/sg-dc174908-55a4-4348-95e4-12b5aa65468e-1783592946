@@ -598,7 +598,7 @@ export default function SesionPage() {
   // Componente de visualización ECG
   function ECGVisualization() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const animationFrameRef = useRef<number>();
+    const animationFrameRef = useRef<number | undefined>(undefined);
 
     useEffect(() => {
       if (!isRecording || !canvasRef.current || !recordingStartTime) return;
