@@ -131,6 +131,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     time: "",
     notes: "",
   });
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const isDeity = profile?.role === "deity";
 
@@ -498,6 +500,60 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     }
   };
 
+  // Helpers para el calendario
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days: (Date | null)[] = [];
+    
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+    
+    return days;
+  };
+
+  const getMonthEvents = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    return events.filter((event) => {
+      const eventDate = new Date(event.event_date);
+      return eventDate.getFullYear() === year && eventDate.getMonth() === month;
+    });
+  };
+
+  const getEventsForDay = (date: Date | null) => {
+    if (!date) return [];
+    const dateStr = date.toISOString().split("T")[0];
+    return events.filter((event) => event.event_date === dateStr);
+  };
+
+  const isSameDay = (date1: Date | null, date2: Date | null) => {
+    if (!date1 || !date2) return false;
+    return (
+      date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate()
+    );
+  };
+
+  const previousMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+  };
+
   if (!isOpen) return null;
 
   const ratingLabels: Record<number, string> = {
@@ -605,138 +661,239 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
                 {/* Calendario */}
                 {isDeity && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gold" />
-                        <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Calendario</h3>
-                      </div>
-                      <button
-                        onClick={() => setShowEventForm(!showEventForm)}
-                        className="text-xs text-gold hover:text-gold/80 transition-colors"
-                      >
-                        {showEventForm ? "Cancelar" : "+ Nuevo Evento"}
-                      </button>
-                    </div>
-
-                    {/* Formulario para crear evento */}
-                    {showEventForm && (
-                      <div className="p-3 bg-background/50 rounded-sm border border-gold/30 space-y-3">
-                        <Input
-                          placeholder="Título del evento"
-                          value={eventForm.title}
-                          onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                        />
-                        <Input
-                          type="date"
-                          value={eventForm.date}
-                          onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
-                        />
-                        <Input
-                          type="time"
-                          placeholder="Hora (opcional)"
-                          value={eventForm.time}
-                          onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
-                        />
-                        <Textarea
-                          placeholder="Notas (opcional)"
-                          value={eventForm.notes}
-                          onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
-                          rows={2}
-                        />
-                        <div className="flex gap-2">
-                          <RitualButton
-                            variant="gold"
-                            onClick={saveEvent}
-                            disabled={!eventForm.title.trim() || !eventForm.date}
-                            className="flex-1"
+                  <ParchmentCard title="Calendario" icon={<Calendar className="w-4 h-4" />}>
+                    <div className="space-y-4">
+                      {/* Navegación de mes */}
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={previousMonth}
+                          className="p-2 hover:bg-muted/30 rounded-sm transition-colors"
+                        >
+                          <svg
+                            className="w-5 h-5 text-foreground"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
                           >
-                            {editingEvent ? "Actualizar" : "Crear Evento"}
-                          </RitualButton>
-                          {editingEvent && (
-                            <RitualButton
-                              variant="outline"
-                              onClick={() => {
-                                setEditingEvent(null);
-                                setEventForm({ title: "", date: "", time: "", notes: "" });
-                              }}
-                            >
-                              Cancelar
-                            </RitualButton>
-                          )}
-                        </div>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <h3 className="font-heading text-lg text-foreground">
+                          {currentMonth.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+                        </h3>
+                        <button
+                          onClick={nextMonth}
+                          className="p-2 hover:bg-muted/30 rounded-sm transition-colors"
+                        >
+                          <svg
+                            className="w-5 h-5 text-foreground"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
                       </div>
-                    )}
 
-                    {/* Lista de eventos */}
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {events.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          No hay eventos en el calendario
-                        </p>
-                      ) : (
-                        events.map((event) => {
-                          const isDeityEvent = event.created_by !== memberId;
+                      {/* Días de la semana */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((day) => (
+                          <div
+                            key={day}
+                            className="text-center font-heading text-xs text-muted-foreground uppercase py-2"
+                          >
+                            {day}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Grid de días del mes */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {getDaysInMonth(currentMonth).map((day, index) => {
+                          const dayEvents = getEventsForDay(day);
+                          const isSelected = isSameDay(day, selectedDate);
+                          const isToday = day && isSameDay(day, new Date());
+
                           return (
-                            <div
-                              key={event.id}
+                            <button
+                              key={index}
+                              onClick={() => {
+                                if (day) {
+                                  setSelectedDate(day);
+                                  const dateStr = day.toISOString().split("T")[0];
+                                  setEventForm({ ...eventForm, date: dateStr });
+                                  setShowEventForm(true);
+                                  setEditingEvent(null);
+                                }
+                              }}
+                              disabled={!day}
                               className={`
-                                p-3 bg-background/50 rounded-sm space-y-2
-                                ${isDeityEvent ? "border-2 border-gold/60" : "border border-border/30"}
+                                aspect-square p-1 rounded-sm border transition-all relative
+                                ${!day ? "invisible" : ""}
+                                ${isSelected ? "border-gold bg-gold/10" : "border-border/30 hover:border-gold/40"}
+                                ${isToday && !isSelected ? "border-gold/60" : ""}
+                                ${dayEvents.length > 0 ? "bg-muted/20" : "bg-background/50"}
                               `}
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="font-heading text-sm text-foreground">
-                                      {event.title}
-                                    </h4>
-                                    {isDeityEvent && (
-                                      <Badge variant="outline" className="text-xs bg-gold/10 text-gold border-gold/30">
-                                        Deidad
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {new Date(event.event_date).toLocaleDateString()}
-                                    {event.event_time && ` - ${event.event_time}`}
-                                  </p>
-                                  {event.notes && (
-                                    <p className="text-xs text-muted-foreground mt-1">{event.notes}</p>
+                              {day && (
+                                <>
+                                  <span className={`font-heading text-xs ${isToday ? "text-gold font-bold" : "text-foreground"}`}>
+                                    {day.getDate()}
+                                  </span>
+                                  {dayEvents.length > 0 && (
+                                    <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-0.5">
+                                      {dayEvents.slice(0, 3).map((event) => {
+                                        const isDeityEvent = event.created_by !== memberId;
+                                        return (
+                                          <div
+                                            key={event.id}
+                                            className={`w-1 h-1 rounded-full ${isDeityEvent ? "bg-gold" : "bg-wine"}`}
+                                          />
+                                        );
+                                      })}
+                                    </div>
                                   )}
-                                </div>
-                                {isDeityEvent && (
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={() => {
-                                        setEditingEvent(event);
-                                        setEventForm({
-                                          title: event.title,
-                                          date: event.event_date,
-                                          time: event.event_time || "",
-                                          notes: event.notes || "",
-                                        });
-                                        setShowEventForm(true);
-                                      }}
-                                      className="p-1.5 text-gold hover:text-gold/80 transition-colors"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => deleteEvent(event.id)}
-                                      className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
+                                </>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Eventos del día seleccionado */}
+                      {selectedDate && (
+                        <div className="space-y-2 pt-2 border-t border-border/30">
+                          <h4 className="font-heading text-sm text-gold">
+                            {selectedDate.toLocaleDateString("es-ES", { 
+                              weekday: "long", 
+                              day: "numeric", 
+                              month: "long" 
+                            })}
+                          </h4>
+
+                          {/* Formulario para crear evento */}
+                          {showEventForm && (
+                            <div className="p-3 bg-background/50 rounded-sm border border-gold/30 space-y-3">
+                              <Input
+                                placeholder="Título del evento"
+                                value={eventForm.title}
+                                onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                              />
+                              <Input
+                                type="time"
+                                placeholder="Hora (opcional)"
+                                value={eventForm.time}
+                                onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+                              />
+                              <Textarea
+                                placeholder="Notas (opcional)"
+                                value={eventForm.notes}
+                                onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
+                                rows={2}
+                              />
+                              <div className="flex gap-2">
+                                <RitualButton
+                                  variant="gold"
+                                  onClick={saveEvent}
+                                  disabled={!eventForm.title.trim()}
+                                  className="flex-1"
+                                >
+                                  {editingEvent ? "Actualizar" : "Crear Evento"}
+                                </RitualButton>
+                                <RitualButton
+                                  variant="outline"
+                                  onClick={() => {
+                                    setShowEventForm(false);
+                                    setEditingEvent(null);
+                                    setEventForm({ title: "", date: "", time: "", notes: "" });
+                                  }}
+                                >
+                                  Cancelar
+                                </RitualButton>
                               </div>
                             </div>
-                          );
-                        })
+                          )}
+
+                          {/* Lista de eventos del día */}
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                            {getEventsForDay(selectedDate).length === 0 ? (
+                              <p className="text-xs text-muted-foreground text-center py-2">
+                                No hay eventos este día
+                              </p>
+                            ) : (
+                              getEventsForDay(selectedDate).map((event) => {
+                                const isDeityEvent = event.created_by !== memberId;
+                                return (
+                                  <div
+                                    key={event.id}
+                                    className={`
+                                      p-2 bg-background/50 rounded-sm space-y-1
+                                      ${isDeityEvent ? "border-2 border-gold/60" : "border border-border/30"}
+                                    `}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <h5 className="font-heading text-xs text-foreground">
+                                            {event.title}
+                                          </h5>
+                                          {isDeityEvent && (
+                                            <Badge variant="outline" className="text-[10px] px-1 py-0 bg-gold/10 text-gold border-gold/30">
+                                              Deidad
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        {event.event_time && (
+                                          <p className="text-[10px] text-muted-foreground">
+                                            {event.event_time}
+                                          </p>
+                                        )}
+                                        {event.notes && (
+                                          <p className="text-[10px] text-muted-foreground mt-1">
+                                            {event.notes}
+                                          </p>
+                                        )}
+                                      </div>
+                                      {isDeityEvent && (
+                                        <div className="flex gap-0.5">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEditingEvent(event);
+                                              setEventForm({
+                                                title: event.title,
+                                                date: event.event_date,
+                                                time: event.event_time || "",
+                                                notes: event.notes || "",
+                                              });
+                                              setShowEventForm(true);
+                                            }}
+                                            className="p-1 text-gold hover:text-gold/80 transition-colors"
+                                          >
+                                            <Edit className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              deleteEvent(event.id);
+                                            }}
+                                            className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
+                  </ParchmentCard>
                 )}
 
                 <ParchmentCard title="Historial de Fe" icon={<Sparkles className="w-4 h-4" />}>
