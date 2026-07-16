@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase, type UserRole, type UserProfile } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import type { User, Session } from "@supabase/supabase-js";
+
+export type UserRole = "deity" | "follower" | null;
 
 export interface UserProfile {
   id: string;
@@ -22,7 +24,7 @@ export interface UserProfile {
   updated_at: string;
 }
 
-export type { UserProfile, UserRole };
+export type { UserProfile };
 
 export interface InvitationCode {
   id: string;
