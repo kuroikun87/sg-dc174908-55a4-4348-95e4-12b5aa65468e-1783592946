@@ -344,6 +344,35 @@ export type Database = {
         }
         Relationships: []
       }
+      cult_titles: {
+        Row: {
+          created_at: string | null
+          cult_id: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          cult_id?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          cult_id?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cult_titles_cult_id_fkey"
+            columns: ["cult_id"]
+            isOneToOne: false
+            referencedRelation: "cults"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cults: {
         Row: {
           created_at: string | null
@@ -509,6 +538,42 @@ export type Database = {
             columns: ["cult_id"]
             isOneToOne: false
             referencedRelation: "cults"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follower_titles: {
+        Row: {
+          created_at: string | null
+          follower_id: string | null
+          id: string
+          title_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          follower_id?: string | null
+          id?: string
+          title_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          follower_id?: string | null
+          id?: string
+          title_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follower_titles_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follower_titles_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "cult_titles"
             referencedColumns: ["id"]
           },
         ]

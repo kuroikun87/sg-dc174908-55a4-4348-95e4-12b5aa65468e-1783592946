@@ -142,9 +142,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleInput, setTitleInput] = useState("");
-  const [titleHistory, setTitleHistory] = useState<string[]>([]);
-  const [showTitleDropdown, setShowTitleDropdown] = useState(false);
+  const [globalTitles, setGlobalTitles] = useState<any[]>([]);
+  const [unlockedTitles, setUnlockedTitles] = useState<string[]>([]);
+  const [newTitleName, setNewTitleName] = useState("");
   const [showLockDialog, setShowLockDialog] = useState(false);
   const [lockDuration, setLockDuration] = useState<"permanent" | "temporary">("permanent");
   const [lockHours, setLockHours] = useState(24);
@@ -190,12 +190,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       }
     }
   }, [memberId, isOpen, isDeity]);
-
-  useEffect(() => {
-    if (member) {
-      setTitleInput(member.title || "");
-    }
-  }, [member]);
 
   const loadLibrary = async () => {
     if (!profile?.cult_id) return;
@@ -314,19 +308,20 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           }
         }
 
-        // Cargar historial de títulos desde faith_points_log
-        const { data: titleLog } = await supabase
-          .from("faith_points_log")
-          .select("reason")
-          .eq("user_id", memberId)
-          .like("reason", "Título:%")
-          .order("created_at", { ascending: false })
-          .limit(20);
-        
-        const titles = titleLog
-          ?.map((log) => log.reason.replace("Título: ", "").trim())
-          .filter((title, index, self) => title && self.indexOf(title) === index) || [];
-        setTitleHistory(titles);
+        // Cargar títulos globales del culto
+        const { data: cultTitlesData } = await supabase
+          .from("cult_titles")
+          .select("*")
+          .eq("cult_id", profileData.cult_id)
+          .order("name");
+        setGlobalTitles(cultTitlesData || []);
+
+        // Cargar títulos desbloqueados por este fiel
+        const { data: followerTitlesData } = await supabase
+          .from("follower_titles")
+          .select("title_id")
+          .eq("follower_id", memberId);
+        setUnlockedTitles(followerTitlesData?.map(ft => ft.title_id) || []);
 
         // Cargar premios activos
         const { data: rewardsData } = await supabase
@@ -661,15 +656,25 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     const year = date.getFullYear();
     const month = date.getMonth();
     return events.filter((event) => {
-      const eventDate = new Date(event.event_date);
-      return eventDate.getFullYear() === year && eventDate.getMonth() === month;
+      // Comparar substrings de la fecha YYYY-MM-DD
+      const dateParts = event.event_date.split("-");
+      const eventYear = parseInt(dateParts[0]);
+      const eventMonth = parseInt(dateParts[1]) - 1; // 0-indexed
+      return eventYear === year && eventMonth === month;
     });
   };
 
   const getEventsForDay = (date: Date | null) => {
     if (!date) return [];
-    const dateStr = date.toISOString().split("T")[0];
+    
+    // Crear string YYYY-MM-DD forzando hora local para evitar offsets de timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const dayNum = String(date.getDate()).padStart(2, "0");
+    const dateStr = `${year}-${month}-${dayNum}`;
+    
     const dayEvents = events.filter((event) => event.event_date === dateStr);
+    
     // Ordenar por hora (event_time) - los que no tienen hora van al final
     dayEvents.sort((a, b) => {
       if (!a.event_time && !b.event_time) return 0;
@@ -677,7 +682,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       if (!b.event_time) return -1;
       return a.event_time.localeCompare(b.event_time);
     });
-    console.log("getEventsForDay:", dateStr, "eventos encontrados:", dayEvents.length, dayEvents);
+    
     return dayEvents;
   };
 
@@ -698,38 +703,75 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
   };
 
-  const updateTitle = async () => {
+  // Funciones de gestión de Títulos
+  const createCultTitle = async () => {
+    if (!newTitleName.trim() || !profile?.cult_id) return;
+    try {
+      const { data, error } = await supabase.from("cult_titles").insert({
+        cult_id: profile.cult_id,
+        name: newTitleName.trim()
+      }).select().single();
+      
+      if (error) throw error;
+      setGlobalTitles([...globalTitles, data]);
+      setNewTitleName("");
+      toast({ title: "Título agregado a la grilla global" });
+    } catch (error: any) {
+      console.error(error);
+      toast({ 
+        title: "Error al crear título", 
+        description: error.message?.includes("unique") ? "Ese título ya existe" : "No se pudo agregar",
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const unlockTitleForFollower = async (titleId: string) => {
+    if (!memberId) return;
+    try {
+      const { error } = await supabase.from("follower_titles").insert({
+        follower_id: memberId,
+        title_id: titleId
+      });
+      if (error) throw error;
+      
+      setUnlockedTitles([...unlockedTitles, titleId]);
+      toast({ title: "Título desbloqueado para este fiel" });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error al desbloquear título", variant: "destructive" });
+    }
+  };
+
+  const setActiveTitle = async (titleName: string) => {
     if (!memberId || !isDeity) return;
 
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ title: titleInput.trim() || null })
+        .update({ title: titleName })
         .eq("id", memberId);
 
       if (error) throw error;
 
       // Registrar el cambio de título
-      if (titleInput.trim()) {
-        await supabase.from("faith_points_log").insert({
-          user_id: memberId,
-          deity_id: user?.id,
-          amount: 0,
-          balance_after: member?.faith_points || 0,
-          reason: `Título: ${titleInput.trim()}`,
-          transaction_type: "grant",
-        });
-      }
+      await supabase.from("faith_points_log").insert({
+        user_id: memberId,
+        deity_id: user?.id,
+        amount: 0,
+        balance_after: member?.faith_points || 0,
+        reason: `Nuevo Título Activo: ${titleName}`,
+        transaction_type: "grant",
+      });
 
-      toast({ title: "Título actualizado" });
+      toast({ title: "Título activo actualizado" });
+      setMember(prev => prev ? { ...prev, title: titleName } : null);
       setIsEditingTitle(false);
-      setShowTitleDropdown(false);
-      await loadMemberData();
     } catch (error) {
-      console.error("Error updating title:", error);
+      console.error("Error updating active title:", error);
       toast({
         title: "Error",
-        description: "No se pudo actualizar el título",
+        description: "No se pudo actualizar el título activo",
         variant: "destructive",
       });
     }
@@ -1082,98 +1124,120 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                       </p>
                     )}
                     
-                    {/* Título editable con lock */}
+                    {/* Título editable con lock y grilla */}
                     {isDeity && (
-                      <div className="flex items-center gap-2">
-                        {isEditingTitle ? (
-                          <div className="flex items-center gap-1 flex-1">
-                            <div className="relative flex-1">
-                              <Input
-                                value={titleInput}
-                                onChange={(e) => setTitleInput(e.target.value)}
-                                onFocus={() => setShowTitleDropdown(true)}
-                                placeholder="Título personalizado..."
-                                className="h-7 text-xs"
-                                disabled={isTitleLocked}
-                              />
-                              {showTitleDropdown && titleHistory.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-sm shadow-lg z-10 max-h-48 overflow-y-auto">
-                                  {titleHistory.map((title, index) => (
-                                    <button
-                                      key={index}
-                                      onClick={() => {
-                                        setTitleInput(title);
-                                        setShowTitleDropdown(false);
-                                      }}
-                                      className="w-full px-3 py-2 text-left text-xs hover:bg-muted/30 transition-colors border-b border-border/30 last:border-0"
-                                    >
-                                      {title}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <button
-                              onClick={updateTitle}
-                              className="p-1 text-gold hover:text-gold/80 transition-colors"
-                              disabled={isTitleLocked}
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setIsEditingTitle(false);
-                                setShowTitleDropdown(false);
-                                setTitleInput(member.title || "");
-                              }}
-                              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => !isTitleLocked && setIsEditingTitle(true)}
-                              className={`font-heading text-sm text-gold flex items-center gap-1 ${isTitleLocked ? 'opacity-50 cursor-not-allowed' : 'hover:text-gold/80'}`}
-                              disabled={isTitleLocked}
-                            >
-                              {member.title || "Sin título"}
-                              {!isTitleLocked && <Edit className="w-3 h-3" />}
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (isTitleLocked && canUnlockTitle) {
-                                  unlockTitle();
-                                } else if (!isTitleLocked) {
-                                  setShowLockDialog(true);
-                                }
-                              }}
-                              className={`p-1 transition-colors ${
-                                isTitleLocked 
-                                  ? canUnlockTitle ? "text-wine hover:text-wine/80" : "text-muted-foreground/30 cursor-not-allowed"
-                                  : "text-muted-foreground hover:text-gold"
-                              }`}
-                              disabled={isTitleLocked && !canUnlockTitle}
-                              title={
-                                isTitleLocked 
-                                  ? canUnlockTitle 
-                                    ? "Desbloquear título" 
-                                    : "Solo la deidad que bloqueó puede desbloquear"
-                                  : "Bloquear título"
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => !isTitleLocked && setIsEditingTitle(!isEditingTitle)}
+                            className={`font-heading text-sm text-silver flex items-center gap-1 ${isTitleLocked ? 'opacity-50 cursor-not-allowed' : 'hover:text-silver/80'}`}
+                            disabled={isTitleLocked}
+                          >
+                            {member.title || "Sin título activo"}
+                            {!isTitleLocked && <Edit className="w-3 h-3" />}
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              if (isTitleLocked && canUnlockTitle) {
+                                unlockTitle();
+                              } else if (!isTitleLocked) {
+                                setShowLockDialog(true);
                               }
-                            >
-                              {isTitleLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-                            </button>
-                          </>
+                            }}
+                            className={`p-1 transition-colors ${
+                              isTitleLocked 
+                                ? canUnlockTitle ? "text-red hover:text-red/80" : "text-muted-foreground/30 cursor-not-allowed"
+                                : "text-muted-foreground hover:text-silver"
+                            }`}
+                            disabled={isTitleLocked && !canUnlockTitle}
+                            title={
+                              isTitleLocked 
+                                ? canUnlockTitle 
+                                  ? "Desbloquear título" 
+                                  : "Solo la deidad que bloqueó puede desbloquear"
+                                : "Bloquear título"
+                            }
+                          >
+                            {isTitleLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+
+                        {/* Grilla interactiva de títulos */}
+                        {isEditingTitle && !isTitleLocked && (
+                          <div className="p-4 border border-border/30 rounded-sm bg-background/50 space-y-4 shadow-xl">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-heading text-sm text-silver">Gestión de Títulos</h4>
+                              <button 
+                                onClick={() => setIsEditingTitle(false)} 
+                                className="p-1 hover:text-red transition-colors text-muted-foreground"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                            
+                            <div className="flex gap-2">
+                              <Input 
+                                value={newTitleName} 
+                                onChange={(e) => setNewTitleName(e.target.value)} 
+                                placeholder="Crear título para el culto..." 
+                                className="text-xs h-8 bg-background border-border/40 focus-visible:ring-silver/50"
+                              />
+                              <RitualButton variant="outline" onClick={createCultTitle} className="h-8 py-0 px-3 text-xs whitespace-nowrap">
+                                <Plus className="w-3 h-3 mr-1"/> Añadir a grilla
+                              </RitualButton>
+                            </div>
+
+                            {globalTitles.length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-2 text-center">No hay títulos en la grilla del culto. Agrega uno arriba.</p>
+                            ) : (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 max-h-60 overflow-y-auto pr-1">
+                                {globalTitles.map(t => {
+                                  const isUnlocked = unlockedTitles.includes(t.id);
+                                  const isActive = member.title === t.name;
+                                  
+                                  return (
+                                    <button
+                                      key={t.id}
+                                      onClick={() => {
+                                        if (isUnlocked && !isActive) {
+                                          setActiveTitle(t.name);
+                                        } else if (!isUnlocked) {
+                                          unlockTitleForFollower(t.id);
+                                        }
+                                      }}
+                                      className={`p-2 border rounded-sm text-xs transition-all flex flex-col items-center justify-center gap-1.5 h-16 ${
+                                        isActive 
+                                          ? "border-red bg-red/10 text-red font-bold" 
+                                          : isUnlocked
+                                          ? "border-silver bg-silver/10 text-silver hover:bg-silver/20"
+                                          : "border-border/30 bg-muted/5 text-muted-foreground hover:border-silver/30"
+                                      }`}
+                                    >
+                                      <span className="text-center leading-tight line-clamp-2">{t.name}</span>
+                                      {isActive ? (
+                                        <span className="text-[9px] text-red uppercase font-bold tracking-wider">Activo</span>
+                                      ) : isUnlocked ? (
+                                        <span className="text-[9px] text-silver uppercase tracking-wider">Desbloqueado</span>
+                                      ) : (
+                                        <span className="text-[9px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 opacity-70">
+                                          <Lock className="w-2.5 h-2.5"/> Bloqueado
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
                     
                     {!isDeity && member.title && (
-                      <p className="font-heading text-sm text-gold">{member.title}</p>
+                      <p className="font-heading text-sm text-silver">{member.title}</p>
                     )}
                     
                     {member.ranks && (
@@ -1578,7 +1642,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                               onClick={() => {
                                 if (day) {
                                   setSelectedDate(day);
-                                  const dateStr = day.toISOString().split("T")[0];
+                                  const year = day.getFullYear();
+                                  const month = String(day.getMonth() + 1).padStart(2, "0");
+                                  const dayNum = String(day.getDate()).padStart(2, "0");
+                                  const dateStr = `${year}-${month}-${dayNum}`;
+                                  
                                   setEventForm({ ...eventForm, date: dateStr });
                                   setShowEventForm(true);
                                   setEditingEvent(null);
@@ -1588,8 +1656,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                               className={`
                                 aspect-square p-1 rounded-sm border transition-all relative
                                 ${!day ? "invisible" : ""}
-                                ${isSelected ? "border-gold bg-gold/10" : "border-border/30 hover:border-gold/40"}
-                                ${isToday && !isSelected ? "border-gold/60" : ""}
+                                ${isSelected ? "border-silver bg-silver/10" : "border-border/30 hover:border-silver/40"}
+                                ${isToday && !isSelected ? "border-silver/60" : ""}
                                 ${dayEvents.length > 0 ? "bg-muted/20" : "bg-background/50"}
                               `}
                             >
