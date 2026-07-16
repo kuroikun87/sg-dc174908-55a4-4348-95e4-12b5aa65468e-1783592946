@@ -39,7 +39,6 @@ import {
   HeartCrack,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
-import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 
 interface MemberSheetProps {
@@ -64,6 +63,7 @@ interface MemberData {
   faith_points: number;
   rank_id: string | null;
   cult_id: string | null;
+  timezone: string | null;
   ranks: { name: string; level: number } | null;
 }
 
