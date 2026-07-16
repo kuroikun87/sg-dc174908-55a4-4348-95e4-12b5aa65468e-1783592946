@@ -347,118 +347,18 @@ export default function TareasPage() {
       <BookPage pageKey="tareas">
         <div className="space-y-6">
           <div className="text-center space-y-2">
-            <h1 className="font-display text-3xl text-foreground">Tareas Asignadas</h1>
+            <h1 className="font-display text-3xl text-foreground">
+              {profile?.role === "deity" ? "Gestión de Tareas" : "Mis Tareas"}
+            </h1>
           </div>
 
-          {tasks.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="font-body text-muted-foreground">No tienes tareas asignadas</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {tasks.map((at) => {
-                const task = at.tasks;
-                if (!task) return null;
-                
-                return (
-                  <ParchmentCard key={at.id}>
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <h3 className="font-heading text-lg text-foreground mb-1">{task.title}</h3>
-                          {task.description && (
-                            <p className="font-body text-sm text-muted-foreground">{task.description}</p>
-                          )}
-                        </div>
-                        <Badge
-                          variant={at.status === "completed" || at.status === "verified" ? "default" : "outline"}
-                          className="shrink-0"
-                        >
-                          {at.status === "completed" ? "Completada" : at.status === "verified" ? "Verificada" : "Pendiente"}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {task.faith_points_reward > 0 && (
-                          <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
-                            <Sparkles className="w-3 h-3 mr-1" />
-                            +{task.faith_points_reward} PF
-                          </Badge>
-                        )}
-                        {task.requires_evidence && (
-                          <Badge variant="outline">
-                            <Camera className="w-3 h-3 mr-1" />
-                            Requiere evidencia
-                          </Badge>
-                        )}
-                      </div>
-
-                      {at.status === "pending" && (
-                        <>
-                          {task.requires_evidence && !at.evidence_url && (
-                            <div className="space-y-2">
-                              <label className="flex items-center gap-2 cursor-pointer w-full">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) uploadEvidence(at.id, file);
-                                  }}
-                                  className="hidden"
-                                  disabled={uploading === at.id}
-                                />
-                                <div
-                                  className={`
-                                    w-full flex items-center justify-center gap-2 px-4 py-2.5
-                                    bg-background/80 border border-border/40 rounded-sm
-                                    font-heading text-sm tracking-wide uppercase
-                                    transition-all duration-200
-                                    ${uploading === at.id ? 'opacity-50 cursor-not-allowed' : 'hover:border-gold/60 hover:bg-background'}
-                                  `}
-                                >
-                                  <Upload className="w-4 h-4 mr-2" />
-                                  {uploading === at.id ? "Subiendo..." : "Subir Evidencia"}
-                                </div>
-                              </label>
-                              <p className="text-xs text-muted-foreground text-center">
-                                Esta tarea requiere evidencia fotográfica
-                              </p>
-                            </div>
-                          )}
-
-                          {at.evidence_url && (
-                            <div className="p-2 bg-muted/20 rounded-sm border border-border/30">
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="w-4 h-4 text-gold shrink-0" />
-                                <span className="text-xs text-muted-foreground">Evidencia subida</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {(!task.requires_evidence || at.evidence_url) && (
-                            <RitualButton
-                              variant="gold"
-                              onClick={() => completeTask(at.id, task.faith_points_reward)}
-                              className="w-full"
-                            >
-                              <CheckCircle2 className="w-4 h-4 mr-2" />
-                              Marcar como Completada
-                            </RitualButton>
-                          )}
-                        </>
-                      )}
-
-                      {at.completed_at && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          Completada: {new Date(at.completed_at).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                  </ParchmentCard>
-                );
-              })}
+          {/* Botón para crear tarea (solo deidades) */}
+          {profile?.role === "deity" && !showTaskForm && (
+            <div className="flex justify-center">
+              <RitualButton variant="gold" onClick={() => setShowTaskForm(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Tarea
+              </RitualButton>
             </div>
           )}
 
