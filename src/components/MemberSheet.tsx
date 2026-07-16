@@ -141,6 +141,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState("");
+  const [titleHistory, setTitleHistory] = useState<string[]>([]);
+  const [showTitleDropdown, setShowTitleDropdown] = useState(false);
   const [showLockDialog, setShowLockDialog] = useState(false);
   const [lockDuration, setLockDuration] = useState<"permanent" | "temporary">("permanent");
   const [lockHours, setLockHours] = useState(24);
@@ -201,11 +203,15 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     try {
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("*, ranks(name, level)")
+        .select(`
+          *,
+          ranks(name, level)
+        `)
         .eq("id", memberId)
         .single();
 
       if (profileError) throw profileError;
+      console.log("Profile data loaded:", profileData);
       setMember(profileData);
 
       // Cargar tareas asignadas con JOIN
@@ -288,6 +294,20 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             setFavorPoints([...(favorData || []), newRating]);
           }
         }
+
+        // Cargar historial de títulos desde faith_points_log
+        const { data: titleLog } = await supabase
+          .from("faith_points_log")
+          .select("reason")
+          .eq("user_id", memberId)
+          .like("reason", "Título:%")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        
+        const titles = titleLog
+          ?.map((log) => log.reason.replace("Título: ", "").trim())
+          .filter((title, index, self) => title && self.indexOf(title) === index) || [];
+        setTitleHistory(titles);
       }
 
     } catch (error) {
@@ -643,9 +663,23 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         .eq("id", memberId);
 
       if (error) throw error;
+
+      // Registrar el cambio de título
+      if (titleInput.trim()) {
+        await supabase.from("faith_points_log").insert({
+          user_id: memberId,
+          deity_id: user?.id,
+          amount: 0,
+          balance_after: member?.faith_points || 0,
+          reason: `Título: ${titleInput.trim()}`,
+          transaction_type: "grant",
+        });
+      }
+
       toast({ title: "Título actualizado" });
       setIsEditingTitle(false);
-      loadMemberData();
+      setShowTitleDropdown(false);
+      await loadMemberData();
     } catch (error) {
       console.error("Error updating title:", error);
       toast({
@@ -857,13 +891,32 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                       <div className="flex items-center gap-2">
                         {isEditingTitle ? (
                           <div className="flex items-center gap-1 flex-1">
-                            <Input
-                              value={titleInput}
-                              onChange={(e) => setTitleInput(e.target.value)}
-                              placeholder="Título..."
-                              className="h-7 text-xs"
-                              disabled={isTitleLocked}
-                            />
+                            <div className="relative flex-1">
+                              <Input
+                                value={titleInput}
+                                onChange={(e) => setTitleInput(e.target.value)}
+                                onFocus={() => setShowTitleDropdown(true)}
+                                placeholder="Título personalizado..."
+                                className="h-7 text-xs"
+                                disabled={isTitleLocked}
+                              />
+                              {showTitleDropdown && titleHistory.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-sm shadow-lg z-10 max-h-48 overflow-y-auto">
+                                  {titleHistory.map((title, index) => (
+                                    <button
+                                      key={index}
+                                      onClick={() => {
+                                        setTitleInput(title);
+                                        setShowTitleDropdown(false);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-xs hover:bg-muted/30 transition-colors border-b border-border/30 last:border-0"
+                                    >
+                                      {title}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             <button
                               onClick={updateTitle}
                               className="p-1 text-gold hover:text-gold/80 transition-colors"
@@ -874,6 +927,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                             <button
                               onClick={() => {
                                 setIsEditingTitle(false);
+                                setShowTitleDropdown(false);
                                 setTitleInput(member.title || "");
                               }}
                               className="p-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -1232,11 +1286,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
               </div>
             )}
 
-            <Tabs defaultValue="info" className="mt-6">
-              <TabsList className="grid w-full grid-cols-3 bg-muted/30">
+            <Tabs defaultValue="info" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="info">Información</TabsTrigger>
                 <TabsTrigger value="tasks">Tareas</TabsTrigger>
-                <TabsTrigger value="notes">Notas</TabsTrigger>
+                {isDeity && <TabsTrigger value="practices">Prácticas</TabsTrigger>}
               </TabsList>
 
               {/* Tab: Información */}
@@ -1960,6 +2014,69 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                   Sección de notas próximamente
                 </p>
               </TabsContent>
+
+              {/* Tab: Prácticas (solo para deidades) */}
+              {isDeity && (
+                <TabsContent value="practices" className="space-y-4">
+                  <ParchmentCard title="Prácticas y Fetiches" icon={<Heart className="w-4 h-4" />}>
+                    {fetishes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        Este fiel aún no ha marcado ninguna práctica
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {fetishes.map((rating) => {
+                          const ratingLabels = {
+                            love: "Le encanta",
+                            like: "Le gusta",
+                            neutral: "Le da igual",
+                            soft_limit: "Límite blando",
+                            hard_limit: "Límite duro",
+                          };
+                          const ratingColors = {
+                            love: "text-gold border-gold/40 bg-gold/10",
+                            like: "text-green-400 border-green-400/40 bg-green-400/10",
+                            neutral: "text-muted-foreground border-border/40 bg-muted/10",
+                            soft_limit: "text-yellow-500 border-yellow-500/40 bg-yellow-500/10",
+                            hard_limit: "text-wine border-wine/40 bg-wine/10",
+                          };
+
+                          return (
+                            <div
+                              key={rating.id}
+                              className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-heading text-sm text-foreground">
+                                      {rating.fetishes?.name || "Práctica"}
+                                    </h4>
+                                    {rating.is_curious && (
+                                      <Star className="w-3.5 h-3.5 text-gold fill-gold" />
+                                    )}
+                                  </div>
+                                  {rating.fetishes?.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {rating.fetishes.description}
+                                    </p>
+                                  )}
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs shrink-0 ${ratingColors[rating.rating]}`}
+                                >
+                                  {ratingLabels[rating.rating]}
+                                </Badge>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ParchmentCard>
+                </TabsContent>
+              )}
             </Tabs>
           </>
         ) : (
