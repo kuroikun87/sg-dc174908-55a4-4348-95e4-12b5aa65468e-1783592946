@@ -52,6 +52,8 @@ interface MemberData {
   display_name: string | null;
   nickname: string | null;
   title: string | null;
+  title_locked_until: string | null;
+  title_locked_by: string | null;
   bio: string | null;
   pronouns: string | null;
   birth_date: string | null;

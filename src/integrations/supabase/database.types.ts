@@ -554,6 +554,8 @@ export type Database = {
           rank_id: string | null
           role: string | null
           title: string | null
+          title_locked_by: string | null
+          title_locked_until: string | null
           updated_at: string | null
         }
         Insert: {
@@ -573,6 +575,8 @@ export type Database = {
           rank_id?: string | null
           role?: string | null
           title?: string | null
+          title_locked_by?: string | null
+          title_locked_until?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -592,6 +596,8 @@ export type Database = {
           rank_id?: string | null
           role?: string | null
           title?: string | null
+          title_locked_by?: string | null
+          title_locked_until?: string | null
           updated_at?: string | null
         }
         Relationships: [
