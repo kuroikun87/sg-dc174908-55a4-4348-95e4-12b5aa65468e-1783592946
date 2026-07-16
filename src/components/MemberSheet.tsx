@@ -34,7 +34,11 @@ import {
   CheckSquare,
   Trash2,
   Edit,
+  Lock,
+  Unlock,
+  HeartCrack,
 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 
 interface MemberSheetProps {
   memberId: string | null;
@@ -133,6 +137,17 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState("");
+  const [showLockDialog, setShowLockDialog] = useState(false);
+  const [lockDuration, setLockDuration] = useState<"permanent" | "temporary">("permanent");
+  const [lockHours, setLockHours] = useState(24);
+  const [lockDays, setLockDays] = useState(0);
+  const [lockMinutes, setLockMinutes] = useState(0);
+  
+  const [faithPoints, setFaithPoints] = useState(0);
+  const [isAdjustingFaith, setIsAdjustingFaith] = useState(false);
+
   const isDeity = profile?.role === "deity";
 
   useEffect(() => {
@@ -143,6 +158,13 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       }
     }
   }, [memberId, isOpen, isDeity]);
+
+  useEffect(() => {
+    if (member) {
+      setFaithPoints(member.faith_points || 0);
+      setTitleInput(member.title || "");
+    }
+  }, [member]);
 
   const loadLibrary = async () => {
     if (!profile?.cult_id) return;
@@ -543,6 +565,13 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!date) return [];
     const dateStr = date.toISOString().split("T")[0];
     const dayEvents = events.filter((event) => event.event_date === dateStr);
+    // Ordenar por hora (event_time) - los que no tienen hora van al final
+    dayEvents.sort((a, b) => {
+      if (!a.event_time && !b.event_time) return 0;
+      if (!a.event_time) return 1;
+      if (!b.event_time) return -1;
+      return a.event_time.localeCompare(b.event_time);
+    });
     console.log("getEventsForDay:", dateStr, "eventos encontrados:", dayEvents.length, dayEvents);
     return dayEvents;
   };
@@ -563,6 +592,135 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const nextMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
   };
+
+  const updateTitle = async () => {
+    if (!memberId || !isDeity) return;
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ title: titleInput.trim() || null })
+        .eq("id", memberId);
+
+      if (error) throw error;
+      toast({ title: "Título actualizado" });
+      setIsEditingTitle(false);
+      loadMemberData();
+    } catch (error) {
+      console.error("Error updating title:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el título",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const lockTitle = async () => {
+    if (!memberId || !user?.id) return;
+
+    try {
+      let lockedUntil = null;
+      if (lockDuration === "temporary") {
+        const totalMinutes = lockDays * 24 * 60 + lockHours * 60 + lockMinutes;
+        lockedUntil = new Date(Date.now() + totalMinutes * 60 * 1000).toISOString();
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          title_locked_until: lockedUntil,
+          title_locked_by: user.id,
+        })
+        .eq("id", memberId);
+
+      if (error) throw error;
+      toast({ title: lockDuration === "permanent" ? "Título bloqueado permanentemente" : "Título bloqueado temporalmente" });
+      setShowLockDialog(false);
+      loadMemberData();
+    } catch (error) {
+      console.error("Error locking title:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo bloquear el título",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const unlockTitle = async () => {
+    if (!memberId) return;
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          title_locked_until: null,
+          title_locked_by: null,
+        })
+        .eq("id", memberId);
+
+      if (error) throw error;
+      toast({ title: "Título desbloqueado" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error unlocking title:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo desbloquear el título",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateFaithPoints = async (newValue: number) => {
+    if (!memberId || !isDeity) return;
+
+    const delta = newValue - (member?.faith_points || 0);
+    if (delta === 0) return;
+
+    try {
+      setIsAdjustingFaith(true);
+      
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ faith_points: newValue })
+        .eq("id", memberId);
+
+      if (updateError) throw updateError;
+
+      // Registrar en el log
+      await supabase.from("faith_points_log").insert({
+        user_id: memberId,
+        deity_id: user?.id,
+        amount: delta,
+        balance_after: newValue,
+        reason: delta > 0 ? "Ajuste manual (concedido)" : "Ajuste manual (revocado)",
+        transaction_type: delta > 0 ? "grant" : "revoke",
+      });
+
+      toast({ 
+        title: delta > 0 ? "Puntos concedidos" : "Puntos revocados",
+        description: `${delta > 0 ? "+" : ""}${delta} Puntos de Fe`
+      });
+      
+      loadMemberData();
+    } catch (error) {
+      console.error("Error updating faith points:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar los puntos de fe",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAdjustingFaith(false);
+    }
+  };
+
+  const isTitleLocked = member?.title_locked_until 
+    ? new Date(member.title_locked_until) > new Date() 
+    : false;
+  const canUnlockTitle = member?.title_locked_by === user?.id || !member?.title_locked_by;
 
   if (!isOpen) return null;
 
@@ -607,14 +765,86 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                     {member.role === "deity" && <Crown className="w-5 h-5 text-wine" />}
                   </div>
                   <div className="space-y-1">
-                    {member.title && (
-                      <p className="font-heading text-sm text-gold">{member.title}</p>
-                    )}
                     {member.nickname && (
                       <p className="font-body text-xs text-muted-foreground">
                         "{member.nickname}"
                       </p>
                     )}
+                    
+                    {/* Título editable con lock */}
+                    {isDeity && (
+                      <div className="flex items-center gap-2">
+                        {isEditingTitle ? (
+                          <div className="flex items-center gap-1 flex-1">
+                            <Input
+                              value={titleInput}
+                              onChange={(e) => setTitleInput(e.target.value)}
+                              placeholder="Título..."
+                              className="h-7 text-xs"
+                              disabled={isTitleLocked}
+                            />
+                            <button
+                              onClick={updateTitle}
+                              className="p-1 text-gold hover:text-gold/80 transition-colors"
+                              disabled={isTitleLocked}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setIsEditingTitle(false);
+                                setTitleInput(member.title || "");
+                              }}
+                              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => !isTitleLocked && setIsEditingTitle(true)}
+                              className={`font-heading text-sm text-gold flex items-center gap-1 ${isTitleLocked ? 'opacity-50 cursor-not-allowed' : 'hover:text-gold/80'}`}
+                              disabled={isTitleLocked}
+                            >
+                              {member.title || "Sin título"}
+                              {!isTitleLocked && <Edit className="w-3 h-3" />}
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (isTitleLocked && canUnlockTitle) {
+                                  unlockTitle();
+                                } else if (!isTitleLocked) {
+                                  setShowLockDialog(true);
+                                }
+                              }}
+                              className={`p-1 transition-colors ${
+                                isTitleLocked 
+                                  ? canUnlockTitle ? "text-wine hover:text-wine/80" : "text-muted-foreground/30 cursor-not-allowed"
+                                  : "text-muted-foreground hover:text-gold"
+                              }`}
+                              disabled={isTitleLocked && !canUnlockTitle}
+                              title={
+                                isTitleLocked 
+                                  ? canUnlockTitle 
+                                    ? "Desbloquear título" 
+                                    : "Solo la deidad que bloqueó puede desbloquear"
+                                  : "Bloquear título"
+                              }
+                            >
+                              {isTitleLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    
+                    {!isDeity && member.title && (
+                      <p className="font-heading text-sm text-gold">{member.title}</p>
+                    )}
+                    
                     {member.ranks && (
                       <Badge variant="outline" className="text-xs">
                         {member.ranks.name} (Nivel {member.ranks.level})
@@ -624,16 +854,148 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-center gap-2 p-3 bg-gold/10 rounded-sm border border-gold/30">
-                <Sparkles className="w-4 h-4 text-gold" />
-                <span className="font-heading text-sm text-muted-foreground">
-                  Puntos de Fe:
-                </span>
-                <span className="font-display text-xl text-gold">
-                  {member.faith_points || 0}
-                </span>
-              </div>
+              {/* Barra de Puntos de Fe (solo para deidades) */}
+              {isDeity && (
+                <div className="space-y-3 p-4 bg-muted/20 rounded-sm border border-border/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-gold" />
+                      <span className="font-heading text-sm text-foreground">Puntos de Fe</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={faithPoints}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setFaithPoints(Math.max(0, Math.min(100, val)));
+                        }}
+                        onBlur={() => updateFaithPoints(faithPoints)}
+                        className="w-16 h-7 text-center text-sm"
+                        disabled={isAdjustingFaith}
+                        min={0}
+                        max={100}
+                      />
+                      <span className="font-mono text-sm text-muted-foreground">/ 100</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <HeartCrack className="w-5 h-5 text-wine/60 shrink-0" />
+                    <Slider
+                      value={[faithPoints]}
+                      onValueChange={([val]) => setFaithPoints(val)}
+                      onValueCommit={([val]) => updateFaithPoints(val)}
+                      max={100}
+                      step={1}
+                      className="flex-1"
+                      disabled={isAdjustingFaith}
+                    />
+                    <Heart className="w-5 h-5 text-gold shrink-0" />
+                  </div>
+                </div>
+              )}
+
+              {/* Display de puntos para fieles */}
+              {!isDeity && (
+                <div className="flex items-center justify-center gap-2 p-3 bg-gold/10 rounded-sm border border-gold/30">
+                  <Sparkles className="w-4 h-4 text-gold" />
+                  <span className="font-heading text-sm text-muted-foreground">
+                    Puntos de Fe:
+                  </span>
+                  <span className="font-display text-xl text-gold">
+                    {member.faith_points || 0}
+                  </span>
+                </div>
+              )}
             </SheetHeader>
+
+            {/* Dialog para configurar lock del título */}
+            {showLockDialog && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLockDialog(false)}>
+                <div className="bg-background border border-border rounded-sm p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="font-heading text-lg text-foreground mb-4">Bloquear Título</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={lockDuration === "permanent"}
+                          onChange={() => setLockDuration("permanent")}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm text-foreground">Permanente (hasta que yo lo desbloquee)</span>
+                      </label>
+                      
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={lockDuration === "temporary"}
+                          onChange={() => setLockDuration("temporary")}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm text-foreground">Temporal</span>
+                      </label>
+                    </div>
+
+                    {lockDuration === "temporary" && (
+                      <div className="pl-6 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={lockDays}
+                            onChange={(e) => setLockDays(Math.max(0, parseInt(e.target.value) || 0))}
+                            className="w-20"
+                            min={0}
+                          />
+                          <span className="text-sm text-muted-foreground">días</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={lockHours}
+                            onChange={(e) => setLockHours(Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
+                            className="w-20"
+                            min={0}
+                            max={23}
+                          />
+                          <span className="text-sm text-muted-foreground">horas</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={lockMinutes}
+                            onChange={(e) => setLockMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                            className="w-20"
+                            min={0}
+                            max={59}
+                          />
+                          <span className="text-sm text-muted-foreground">minutos</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-2">
+                      <RitualButton
+                        variant="gold"
+                        onClick={lockTitle}
+                        className="flex-1"
+                      >
+                        <Lock className="w-4 h-4 mr-2" />
+                        Bloquear
+                      </RitualButton>
+                      <RitualButton
+                        variant="outline"
+                        onClick={() => setShowLockDialog(false)}
+                      >
+                        Cancelar
+                      </RitualButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Tabs defaultValue="info" className="mt-6">
               <TabsList className="grid w-full grid-cols-3 bg-muted/30">
@@ -758,7 +1120,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                         return (
                                           <div
                                             key={event.id}
-                                            className={`w-1 h-1 rounded-full ${isDeityEvent ? "bg-gold" : "bg-wine"}`}
+                                            className={`w-1.5 h-1.5 rounded-full ${isDeityEvent ? "bg-gold" : "bg-wine"}`}
                                           />
                                         );
                                       })}
