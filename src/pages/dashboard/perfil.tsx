@@ -47,41 +47,19 @@ export default function PerfilPage() {
       setBio(profile.bio || "");
       setPronouns(profile.pronouns || "");
       setBirthDate(profile.birth_date || "");
+      
+      // Sincronizar formData con profile
+      setFormData({
+        full_name: profile.full_name || "",
+        display_name: profile.display_name || "",
+        nickname: profile.nickname || "",
+        title: profile.title || "",
+        bio: profile.bio || "",
+        pronouns: profile.pronouns || "",
+        birth_date: profile.birth_date || "",
+      });
     }
   }, [profile]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    setIsSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        display_name: displayName || null,
-        nickname: nickname || null,
-        bio: bio || null,
-        pronouns: pronouns || null,
-        birth_date: birthDate || null,
-      })
-      .eq("id", user.id);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: `No se pudieron guardar los cambios: ${error.message}`,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Perfil actualizado",
-        description: "Tus datos han sido guardados correctamente.",
-      });
-    }
-
-    setIsSaving(false);
-  };
 
   const handleLeaveCult = async () => {
     if (!user) {
@@ -183,6 +161,7 @@ export default function PerfilPage() {
   };
 
   const updateProfile = async () => {
+    setIsSaving(true);
     try {
       const { error } = await supabase
         .from("profiles")
@@ -200,7 +179,6 @@ export default function PerfilPage() {
       if (error) throw error;
 
       toast({ title: "Perfil actualizado" });
-      setIsEditing(false);
       window.location.reload();
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -209,6 +187,8 @@ export default function PerfilPage() {
         description: "No se pudo actualizar el perfil",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -237,7 +217,7 @@ export default function PerfilPage() {
 
           {/* Información del perfil */}
           <ParchmentCard title="Datos Personales" icon={<UserCircle className="w-4 h-4" />}>
-            <form onSubmit={handleSave} className="space-y-4">
+            <div className="space-y-4">
               {/* Nombre completo */}
               <div>
                 <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
@@ -245,11 +225,11 @@ export default function PerfilPage() {
                 </label>
                 <input
                   type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  value={formData.display_name}
+                  onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
                   placeholder="Tu nombre..."
                   className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                             text-foreground font-body focus:outline-none focus:border-silver/50"
                 />
               </div>
 
@@ -260,13 +240,33 @@ export default function PerfilPage() {
                 </label>
                 <input
                   type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
+                  value={formData.nickname}
+                  onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                   placeholder="Cómo te llaman..."
                   className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                             text-foreground font-body focus:outline-none focus:border-silver/50"
                 />
               </div>
+
+              {/* Título (solo deidades) */}
+              {profile.role === "deity" && (
+                <div>
+                  <label className="font-heading text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+                    Título (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Tu título..."
+                    className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
+                               text-foreground font-body focus:outline-none focus:border-silver/50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Como deidad, puedes establecer tu propio título
+                  </p>
+                </div>
+              )}
 
               {/* Descripción */}
               <div>
@@ -274,12 +274,12 @@ export default function PerfilPage() {
                   Descripción (opcional)
                 </label>
                 <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
+                  value={formData.bio}
+                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                   placeholder="Preséntate brevemente..."
                   rows={3}
                   className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                             text-foreground font-body focus:outline-none focus:border-gold/50 resize-none"
+                             text-foreground font-body focus:outline-none focus:border-silver/50 resize-none"
                 />
               </div>
 
@@ -290,11 +290,11 @@ export default function PerfilPage() {
                 </label>
                 <input
                   type="text"
-                  value={pronouns}
-                  onChange={(e) => setPronouns(e.target.value)}
+                  value={formData.pronouns}
+                  onChange={(e) => setFormData({ ...formData, pronouns: e.target.value })}
                   placeholder="Ej: Él/Ella/Elle"
                   className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                             text-foreground font-body focus:outline-none focus:border-silver/50"
                 />
               </div>
 
@@ -305,19 +305,19 @@ export default function PerfilPage() {
                 </label>
                 <input
                   type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
+                  value={formData.birth_date}
+                  onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                   className="w-full bg-background/50 border border-border rounded-sm px-3 py-2
-                             text-foreground font-body focus:outline-none focus:border-gold/50"
+                             text-foreground font-body focus:outline-none focus:border-silver/50"
                 />
               </div>
 
               {/* Botón guardar */}
               <RitualButton 
-                type="submit" 
                 variant="gold" 
                 className="w-full"
                 disabled={isSaving}
+                onClick={updateProfile}
               >
                 {isSaving ? (
                   <>
@@ -331,7 +331,7 @@ export default function PerfilPage() {
                   </>
                 )}
               </RitualButton>
-            </form>
+            </div>
           </ParchmentCard>
 
           {/* Información del rol */}
