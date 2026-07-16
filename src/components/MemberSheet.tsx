@@ -217,7 +217,22 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select(`
-          *,
+          id,
+          full_name,
+          display_name,
+          nickname,
+          title,
+          title_locked_until,
+          title_locked_by,
+          bio,
+          pronouns,
+          birth_date,
+          avatar_url,
+          role,
+          faith_points,
+          rank_id,
+          cult_id,
+          timezone,
           ranks(name, level)
         `)
         .eq("id", memberId)
@@ -765,8 +780,13 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       });
 
       toast({ title: "Título activo actualizado" });
+      
+      // Actualizar el estado local inmediatamente
       setMember(prev => prev ? { ...prev, title: titleName } : null);
       setIsEditingTitle(false);
+      
+      // Recargar datos completos para asegurar sincronización
+      await loadMemberData();
     } catch (error) {
       console.error("Error updating active title:", error);
       toast({

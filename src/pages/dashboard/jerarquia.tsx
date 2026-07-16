@@ -218,7 +218,22 @@ export default function JerarquiaPage() {
                   <div className="flex gap-6 items-start flex-wrap justify-center">
                     {deities.map((deity) => (
                       <div key={deity.id} className="relative">
-                        <HierarchyNode person={deity} isDeity />
+                        <div className="flex flex-col items-center gap-1">
+                          <Avatar className="w-12 h-12 border border-silver/30">
+                            <AvatarImage src={deity.avatar_url || ""} />
+                            <AvatarFallback className="bg-muted text-xs">
+                              {deity.display_name?.[0]?.toUpperCase() || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs font-heading text-center leading-tight">
+                            {deity.display_name || "Sin nombre"}
+                          </span>
+                          {deity.title && (
+                            <span className="text-[10px] text-silver text-center leading-tight">
+                              {deity.title}
+                            </span>
+                          )}
+                        </div>
                         <div className="absolute -top-6 left-1/2 w-px h-6 bg-border/40 -translate-x-1/2" />
                       </div>
                     ))}
@@ -237,7 +252,22 @@ export default function JerarquiaPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.1 }}
                     >
-                      <HierarchyNode person={follower} />
+                      <div className="flex flex-col items-center gap-1">
+                        <Avatar className="w-12 h-12 border border-silver/30">
+                          <AvatarImage src={follower.avatar_url || ""} />
+                          <AvatarFallback className="bg-muted text-xs">
+                            {follower.display_name?.[0]?.toUpperCase() || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs font-heading text-center leading-tight">
+                          {follower.display_name || "Sin nombre"}
+                        </span>
+                        {follower.title && (
+                          <span className="text-[10px] text-silver text-center leading-tight">
+                            {follower.title}
+                          </span>
+                        )}
+                      </div>
                     </motion.div>
                   ))}
                 </div>

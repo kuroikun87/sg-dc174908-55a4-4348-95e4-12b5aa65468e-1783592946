@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Save, LogOut, Trash2, Loader2, Calendar, UserCircle } from "lucide-react";
+import { User, Save, LogOut, Trash2, Loader2, Calendar, UserCircle, Crown, Avatar, AvatarImage, AvatarFallback } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ParchmentCard } from "@/components/ui/parchment-card";
@@ -25,6 +25,18 @@ export default function PerfilPage() {
   const [bio, setBio] = useState("");
   const [pronouns, setPronouns] = useState("");
   const [birthDate, setBirthDate] = useState("");
+
+  const [formData, setFormData] = useState({
+    full_name: profile?.full_name || "",
+    display_name: profile?.display_name || "",
+    nickname: profile?.nickname || "",
+    title: profile?.title || "",
+    bio: profile?.bio || "",
+    pronouns: profile?.pronouns || "",
+    birth_date: profile?.birth_date || "",
+  });
+
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -168,6 +180,36 @@ export default function PerfilPage() {
     }
   };
 
+  const updateProfile = async () => {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: formData.full_name || null,
+          display_name: formData.display_name || null,
+          nickname: formData.nickname || null,
+          title: formData.title || null,
+          bio: formData.bio || null,
+          pronouns: formData.pronouns || null,
+          birth_date: formData.birth_date || null,
+        })
+        .eq("id", profile.id);
+
+      if (error) throw error;
+
+      toast({ title: "Perfil actualizado" });
+      setIsEditing(false);
+      window.location.reload();
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el perfil",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!profile) {
     return (
       <AppLayout title="Perfil" icon={<User className="w-5 h-5" />}>
@@ -293,28 +335,33 @@ export default function PerfilPage() {
           {/* Información del rol */}
           <ParchmentCard title="Información del Culto" icon={<User className="w-4 h-4" />}>
             <div className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-border/30">
-                <span className="font-heading text-xs text-muted-foreground uppercase tracking-wider">Rol</span>
-                <span className="font-body text-sm text-foreground">
-                  {isDeity ? (
-                    profile.is_main_deity ? "Deidad Principal" : "Deidad"
-                  ) : (
-                    "Fiel"
+              <div className="flex items-center gap-4">
+                <Avatar className="w-20 h-20 border-2 border-silver/30">
+                  <AvatarImage src={profile.avatar_url || ""} />
+                  <AvatarFallback className="bg-muted text-foreground text-2xl">
+                    {profile.display_name?.[0]?.toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-1">
+                  <h2 className="font-heading text-2xl text-foreground">
+                    {profile.display_name || profile.full_name || "Sin nombre"}
+                  </h2>
+                  {profile.title && (
+                    <p className="font-heading text-sm text-silver">{profile.title}</p>
                   )}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-2 border-b border-border/30">
-                <span className="font-heading text-xs text-muted-foreground uppercase tracking-wider">Email</span>
-                <span className="font-body text-sm text-foreground">{user?.email}</span>
-              </div>
-
-              {profile.title && (
-                <div className="flex items-center justify-between py-2 border-b border-border/30">
-                  <span className="font-heading text-xs text-muted-foreground uppercase tracking-wider">Título</span>
-                  <span className="font-body text-sm text-gold">{profile.title}</span>
+                  {profile.role === "deity" && (
+                    <Badge variant="outline" className="border-silver/40 bg-silver/10 text-silver">
+                      <Crown className="w-3 h-3 mr-1" />
+                      Deidad
+                    </Badge>
+                  )}
+                  {profile.role === "follower" && profile.ranks && (
+                    <Badge variant="outline" className="border-border/40 bg-muted/10 text-muted-foreground">
+                      {profile.ranks.name} (Nivel {profile.ranks.level})
+                    </Badge>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </ParchmentCard>
 

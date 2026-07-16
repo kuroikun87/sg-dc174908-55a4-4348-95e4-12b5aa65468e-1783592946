@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { Crown, Heart, ArrowLeft, LogOut } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -38,13 +39,27 @@ export function AppLayout({ children, title, icon, backHref = "/dashboard" }: Ap
                 </span>
               )}
               
-              <div>
-                <h1 className="font-display text-xl md:text-2xl text-foreground">
-                  {title}
-                </h1>
-                <p className="font-heading text-xs text-muted-foreground tracking-wider">
-                  {profile?.display_name || "Desconocido"} · {role === "deity" ? "Deidad" : "Fiel"}
-                </p>
+              <div className="flex items-center gap-3 p-4 border-b border-border/30">
+                <Avatar className="w-10 h-10 border border-silver/30">
+                  <AvatarImage src={profile?.avatar_url || ""} />
+                  <AvatarFallback className="bg-muted">
+                    {profile?.display_name?.[0]?.toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="font-heading text-sm text-foreground truncate">
+                    {profile?.display_name || profile?.full_name || "Usuario"}
+                  </p>
+                  {profile?.title && (
+                    <p className="text-xs text-silver truncate">{profile.title}</p>
+                  )}
+                  {!profile?.title && profile?.role === "deity" && (
+                    <p className="text-xs text-muted-foreground">Deidad</p>
+                  )}
+                  {!profile?.title && profile?.role === "follower" && (
+                    <p className="text-xs text-muted-foreground">Fiel</p>
+                  )}
+                </div>
               </div>
             </div>
             
