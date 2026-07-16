@@ -25,8 +25,6 @@ export interface UserProfile {
   updated_at: string;
 }
 
-export type { UserProfile };
-
 export interface InvitationCode {
   id: string;
   code: string;
