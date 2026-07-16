@@ -2,6 +2,26 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase, type UserRole, type UserProfile } from "@/lib/supabase";
 import type { User, Session } from "@supabase/supabase-js";
 
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  display_name: string | null;
+  nickname: string | null;
+  title: string | null;
+  bio: string | null;
+  pronouns: string | null;
+  birth_date: string | null;
+  avatar_url: string | null;
+  role: "deity" | "follower" | null;
+  cult_id: string | null;
+  rank_id: string | null;
+  faith_points: number;
+  timezone: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type { UserProfile, UserRole };
 
 export interface InvitationCode {
