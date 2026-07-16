@@ -7,8 +7,9 @@ import { BookPage } from "@/components/layout/BookPage";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Loader2, Upload, CheckCircle2, Clock, Sparkles, Camera, Plus, Separator } from "lucide-react";
-import { Checkbox, Input, Textarea } from "@/components/ui";
+import { CheckSquare, Loader2, Upload, CheckCircle2, Clock, Sparkles, Camera, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 
@@ -41,7 +42,7 @@ export default function TareasPage() {
 
   useEffect(() => {
     loadData();
-  }, [user, profile]));
+  }, [user, profile]);
 
   const loadData = async () => {
     if (!profile?.cult_id) return;
@@ -60,7 +61,7 @@ export default function TareasPage() {
         `)
         .eq("assigned_by", user?.id)
         .order("created_at", { ascending: false });
-      setAssignedTasks(assignedData || []);
+      setTasks(assignedData || []);
 
       // Cargar biblioteca de tareas
       const { data: tasksData } = await supabase
