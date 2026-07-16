@@ -240,7 +240,14 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       if (profileError) throw profileError;
       console.log("Profile data loaded:", profileData);
-      setMember(profileData);
+      
+      // Asegurar que ranks sea un objeto y no un array si Supabase lo devuelve como array
+      const formattedProfileData = {
+        ...profileData,
+        ranks: Array.isArray(profileData.ranks) ? profileData.ranks[0] : profileData.ranks
+      };
+      
+      setMember(formattedProfileData as any);
 
       // Cargar tareas asignadas con JOIN
       const { data: tasksData } = await supabase

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Save, LogOut, Trash2, Loader2, Calendar, UserCircle, Crown, Avatar, AvatarImage, AvatarFallback } from "lucide-react";
+import { User, Save, LogOut, Trash2, Loader2, Calendar, UserCircle, Crown } from "lucide-react";
 import { BookPage } from "@/components/layout/BookPage";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { RitualButton } from "@/components/ui/ritual-button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -355,9 +357,9 @@ export default function PerfilPage() {
                       Deidad
                     </Badge>
                   )}
-                  {profile.role === "follower" && profile.ranks && (
+                  {profile.role === "follower" && (
                     <Badge variant="outline" className="border-border/40 bg-muted/10 text-muted-foreground">
-                      {profile.ranks.name} (Nivel {profile.ranks.level})
+                      Fiel
                     </Badge>
                   )}
                 </div>
