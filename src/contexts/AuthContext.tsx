@@ -20,6 +20,7 @@ export interface UserProfile {
   rank_id: string | null;
   faith_points: number;
   timezone: string | null;
+  is_main_deity: boolean | null;
   created_at: string;
   updated_at: string;
 }
