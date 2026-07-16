@@ -39,6 +39,8 @@ import {
   HeartCrack,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface MemberSheetProps {
   memberId: string | null;
@@ -157,9 +159,23 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [myFavorRating, setMyFavorRating] = useState(50);
   const [showAllFavor, setShowAllFavor] = useState(false);
   const [isAdjustingFavor, setIsAdjustingFavor] = useState(false);
-  
-  const [faithPoints, setFaithPoints] = useState(0);
-  const [isAdjustingFaith, setIsAdjustingFaith] = useState(false);
+
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    description: "",
+    requires_evidence: false,
+    recurrence_type: "once" as "once" | "daily" | "weekly",
+    recurrence_days: [] as number[],
+    time_limit: "",
+    due_date: "",
+    reward_id: "",
+    reward_faith_points: 0,
+    punishment_id: "",
+    punishment_faith_points: 0,
+  });
+  const [rewards, setRewards] = useState<any[]>([]);
+  const [punishments, setPunishments] = useState<any[]>([]);
 
   const isDeity = profile?.role === "deity";
 
@@ -308,6 +324,24 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           ?.map((log) => log.reason.replace("Título: ", "").trim())
           .filter((title, index, self) => title && self.indexOf(title) === index) || [];
         setTitleHistory(titles);
+
+        // Cargar premios activos
+        const { data: rewardsData } = await supabase
+          .from("rewards")
+          .select("*")
+          .eq("cult_id", profileData.cult_id)
+          .eq("is_active", true)
+          .order("name");
+        setRewards(rewardsData || []);
+
+        // Cargar consecuencias activas
+        const { data: punishmentsData } = await supabase
+          .from("punishments")
+          .select("*")
+          .eq("cult_id", profileData.cult_id)
+          .eq("is_active", true)
+          .order("name");
+        setPunishments(punishmentsData || []);
       }
 
     } catch (error) {
@@ -836,6 +870,131 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     ? new Date(member.title_locked_until) > new Date() 
     : false;
   const canUnlockTitle = member?.title_locked_by === user?.id || !member?.title_locked_by;
+
+  const weekDays = [
+    { value: 0, label: "Dom" },
+    { value: 1, label: "Lun" },
+    { value: 2, label: "Mar" },
+    { value: 3, label: "Mié" },
+    { value: 4, label: "Jue" },
+    { value: 5, label: "Vie" },
+    { value: 6, label: "Sáb" },
+  ];
+
+  const toggleWeekDay = (day: number) => {
+    if (taskForm.recurrence_days.includes(day)) {
+      setTaskForm({
+        ...taskForm,
+        recurrence_days: taskForm.recurrence_days.filter((d) => d !== day),
+      });
+    } else {
+      setTaskForm({
+        ...taskForm,
+        recurrence_days: [...taskForm.recurrence_days, day].sort(),
+      });
+    }
+  };
+
+  const saveTask = async () => {
+    if (!profile?.cult_id || !taskForm.title.trim() || !memberId) {
+      toast({
+        title: "Error",
+        description: "Complete todos los campos requeridos",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar fecha/hora según tipo de tarea
+    if (taskForm.recurrence_type === "once" && !taskForm.due_date) {
+      toast({
+        title: "Error",
+        description: "Las tareas únicas requieren fecha límite",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if ((taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly") && !taskForm.time_limit) {
+      toast({
+        title: "Error",
+        description: "Las tareas recurrentes requieren horario límite",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (taskForm.recurrence_type === "weekly" && taskForm.recurrence_days.length === 0) {
+      toast({
+        title: "Error",
+        description: "Seleccione al menos un día de la semana",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Crear tarea en biblioteca
+      const { data: newTask, error: taskError } = await supabase
+        .from("tasks")
+        .insert({
+          cult_id: profile.cult_id,
+          title: taskForm.title,
+          description: taskForm.description || null,
+          requires_evidence: taskForm.requires_evidence,
+          recurrence_type: taskForm.recurrence_type,
+          recurrence_days: taskForm.recurrence_type === "weekly" ? taskForm.recurrence_days : null,
+          time_limit: taskForm.time_limit || null,
+        })
+        .select()
+        .single();
+
+      if (taskError) throw taskError;
+
+      // Asignar al fiel
+      const { error: assignError } = await supabase
+        .from("assigned_tasks")
+        .insert({
+          task_id: newTask.id,
+          follower_id: memberId,
+          assigned_by: user?.id,
+          due_date: taskForm.recurrence_type === "once" ? taskForm.due_date : null,
+          reward_id: taskForm.reward_id || null,
+          reward_faith_points: taskForm.reward_faith_points || 0,
+          punishment_id: taskForm.punishment_id || null,
+          punishment_faith_points: taskForm.punishment_faith_points || 0,
+          deity_timezone: profile.timezone || "UTC",
+          follower_timezone: member?.timezone || "UTC",
+        });
+
+      if (assignError) throw assignError;
+
+      toast({ title: "Tarea asignada" });
+
+      setShowTaskForm(false);
+      setTaskForm({
+        title: "",
+        description: "",
+        requires_evidence: false,
+        recurrence_type: "once",
+        recurrence_days: [],
+        time_limit: "",
+        due_date: "",
+        reward_id: "",
+        reward_faith_points: 0,
+        punishment_id: "",
+        punishment_faith_points: 0,
+      });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error saving task:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar la tarea",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -1571,441 +1730,332 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
               </TabsContent>
 
               {/* Tab: Tareas */}
-              <TabsContent value="tasks" className="space-y-6">
-                {/* Sección: Tareas Asignadas */}
-                <div className="space-y-3">
-                  <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Tareas Asignadas</h3>
+              <TabsContent value="tasks" className="space-y-4">
+                {/* Botón para crear nueva tarea */}
+                {isDeity && !showTaskForm && (
+                  <div className="flex justify-center">
+                    <RitualButton variant="gold" onClick={() => setShowTaskForm(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nueva Tarea
+                    </RitualButton>
+                  </div>
+                )}
+
+                {/* Formulario de asignación de tarea */}
+                {showTaskForm && (
+                  <ParchmentCard title="Nueva Tarea" icon={<Plus className="w-4 h-4" />}>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm text-muted-foreground">Título *</label>
+                        <Input
+                          value={taskForm.title}
+                          onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                          placeholder="Título de la tarea"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm text-muted-foreground">Descripción</label>
+                        <Textarea
+                          value={taskForm.description}
+                          onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                          placeholder="Descripción detallada..."
+                          rows={3}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm text-muted-foreground">Tipo de tarea *</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button
+                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "once" })}
+                            className={`p-3 rounded-sm border text-sm transition-all ${
+                              taskForm.recurrence_type === "once"
+                                ? "border-gold bg-gold/10 text-gold"
+                                : "border-border/30 hover:border-gold/40"
+                            }`}
+                          >
+                            Única
+                          </button>
+                          <button
+                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "daily" })}
+                            className={`p-3 rounded-sm border text-sm transition-all ${
+                              taskForm.recurrence_type === "daily"
+                                ? "border-gold bg-gold/10 text-gold"
+                                : "border-border/30 hover:border-gold/40"
+                            }`}
+                          >
+                            Diaria
+                          </button>
+                          <button
+                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "weekly" })}
+                            className={`p-3 rounded-sm border text-sm transition-all ${
+                              taskForm.recurrence_type === "weekly"
+                                ? "border-gold bg-gold/10 text-gold"
+                                : "border-border/30 hover:border-gold/40"
+                            }`}
+                          >
+                            Semanal
+                          </button>
+                        </div>
+                      </div>
+
+                      {taskForm.recurrence_type === "once" && (
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Fecha límite *</label>
+                          <Input
+                            type="datetime-local"
+                            value={taskForm.due_date}
+                            onChange={(e) => setTaskForm({ ...taskForm, due_date: e.target.value })}
+                          />
+                        </div>
+                      )}
+
+                      {(taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly") && (
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Horario límite *</label>
+                          <Input
+                            type="time"
+                            value={taskForm.time_limit}
+                            onChange={(e) => setTaskForm({ ...taskForm, time_limit: e.target.value })}
+                          />
+                        </div>
+                      )}
+
+                      {taskForm.recurrence_type === "weekly" && (
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Días de la semana *</label>
+                          <div className="grid grid-cols-7 gap-1">
+                            {weekDays.map((day) => (
+                              <button
+                                key={day.value}
+                                onClick={() => toggleWeekDay(day.value)}
+                                className={`p-2 rounded-sm border text-xs font-heading transition-all ${
+                                  taskForm.recurrence_days.includes(day.value)
+                                    ? "border-gold bg-gold/10 text-gold"
+                                    : "border-border/30 hover:border-gold/40"
+                                }`}
+                              >
+                                {day.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-sm">
+                        <Checkbox
+                          checked={taskForm.requires_evidence}
+                          onCheckedChange={(checked) =>
+                            setTaskForm({ ...taskForm, requires_evidence: checked as boolean })
+                          }
+                        />
+                        <label className="text-sm text-foreground">Requiere evidencia fotográfica</label>
+                      </div>
+
+                      <Separator className="my-4" />
+
+                      <div className="space-y-3">
+                        <h4 className="font-heading text-sm text-gold">Premio al completar</h4>
+                        
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Premio de la lista (opcional)</label>
+                          <select
+                            value={taskForm.reward_id}
+                            onChange={(e) => setTaskForm({ ...taskForm, reward_id: e.target.value })}
+                            className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
+                          >
+                            <option value="">Sin premio de lista</option>
+                            {rewards.map((reward) => (
+                              <option key={reward.id} value={reward.id}>
+                                {reward.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Puntos de Fe adicionales</label>
+                          <Input
+                            type="number"
+                            value={taskForm.reward_faith_points}
+                            onChange={(e) =>
+                              setTaskForm({ ...taskForm, reward_faith_points: parseInt(e.target.value) || 0 })
+                            }
+                            min={0}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+
+                      <Separator className="my-4" />
+
+                      <div className="space-y-3">
+                        <h4 className="font-heading text-sm text-wine">Consecuencia si no completa</h4>
+                        
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Consecuencia de la lista (opcional)</label>
+                          <select
+                            value={taskForm.punishment_id}
+                            onChange={(e) => setTaskForm({ ...taskForm, punishment_id: e.target.value })}
+                            className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
+                          >
+                            <option value="">Sin consecuencia de lista</option>
+                            {punishments.map((punishment) => (
+                              <option key={punishment.id} value={punishment.id}>
+                                {punishment.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Puntos de Fe a quitar</label>
+                          <Input
+                            type="number"
+                            value={taskForm.punishment_faith_points}
+                            onChange={(e) =>
+                              setTaskForm({ ...taskForm, punishment_faith_points: parseInt(e.target.value) || 0 })
+                            }
+                            min={0}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <RitualButton variant="gold" onClick={saveTask} className="flex-1">
+                          Asignar Tarea
+                        </RitualButton>
+                        <RitualButton
+                          variant="outline"
+                          onClick={() => {
+                            setShowTaskForm(false);
+                            setTaskForm({
+                              title: "",
+                              description: "",
+                              requires_evidence: false,
+                              recurrence_type: "once",
+                              recurrence_days: [],
+                              time_limit: "",
+                              due_date: "",
+                              reward_id: "",
+                              reward_faith_points: 0,
+                              punishment_id: "",
+                              punishment_faith_points: 0,
+                            });
+                          }}
+                        >
+                          Cancelar
+                        </RitualButton>
+                      </div>
+                    </div>
+                  </ParchmentCard>
+                )}
+
+                {/* Lista de tareas asignadas */}
+                <ParchmentCard title="Tareas Asignadas" icon={<CheckSquare className="w-4 h-4" />}>
                   {followerTasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
+                    <p className="text-sm text-muted-foreground text-center py-8">
                       No hay tareas asignadas
                     </p>
                   ) : (
-                    <div className="space-y-2">
-                      {followerTasks.map((at) => (
-                        <div key={at.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
+                    <div className="space-y-3">
+                      {followerTasks.map((assignment) => (
+                        <div
+                          key={assignment.id}
+                          className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2"
+                        >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <p className="font-heading text-sm text-foreground">{at.tasks?.title || "Tarea eliminada"}</p>
-                              {at.tasks?.description && (
-                                <p className="text-xs text-muted-foreground mt-1">{at.tasks.description}</p>
+                              <h4 className="font-heading text-sm text-foreground">
+                                {assignment.tasks?.title || "Tarea"}
+                              </h4>
+                              {assignment.tasks?.description && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {assignment.tasks.description}
+                                </p>
                               )}
-                              <div className="flex gap-2 mt-2">
-                                <Badge variant={at.status === "completed" ? "default" : "outline"} className="text-xs">
-                                  {at.status === "completed" ? "Completada" : at.status === "verified" ? "Verificada" : "Pendiente"}
-                                </Badge>
-                                {at.tasks?.faith_points_reward > 0 && (
-                                  <Badge variant="outline" className="text-xs bg-gold/10 text-gold">
-                                    +{at.tasks.faith_points_reward} PF
-                                  </Badge>
-                                )}
-                              </div>
                             </div>
-                            {isDeity && at.status === "pending" && (
-                              <button
-                                onClick={() => {
-                                  if (confirm("¿Eliminar esta tarea?")) {
-                                    supabase.from("assigned_tasks").delete().eq("id", at.id).then(() => {
-                                      toast({ title: "Tarea eliminada" });
-                                      loadMemberData();
-                                    });
-                                  }
-                                }}
-                                className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <Badge
+                              variant="outline"
+                              className={`text-xs shrink-0 ${
+                                assignment.status === "completed"
+                                  ? "border-gold/40 bg-gold/10 text-gold"
+                                  : assignment.status === "failed"
+                                  ? "border-wine/40 bg-wine/10 text-wine"
+                                  : "border-border/40 bg-muted/10 text-muted-foreground"
+                              }`}
+                            >
+                              {assignment.status === "completed"
+                                ? "Completada"
+                                : assignment.status === "failed"
+                                ? "Fallida"
+                                : "Pendiente"}
+                            </Badge>
                           </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Tipo: </span>
+                              <span className="text-foreground">
+                                {assignment.tasks?.recurrence_type === "once"
+                                  ? "Única"
+                                  : assignment.tasks?.recurrence_type === "daily"
+                                  ? "Diaria"
+                                  : "Semanal"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Límite: </span>
+                              <span className="text-foreground">
+                                {assignment.due_date
+                                  ? new Date(assignment.due_date).toLocaleString()
+                                  : assignment.tasks?.time_limit || "—"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {(assignment.rewards || assignment.reward_faith_points > 0) && (
+                            <div className="flex items-center gap-2 p-2 bg-gold/5 rounded-sm">
+                              <Sparkles className="w-3 h-3 text-gold shrink-0" />
+                              <span className="text-xs text-muted-foreground">Premio:</span>
+                              <span className="text-xs text-foreground">
+                                {assignment.rewards?.name}
+                                {assignment.rewards?.name && assignment.reward_faith_points > 0 && " + "}
+                                {assignment.reward_faith_points > 0 && `${assignment.reward_faith_points} Puntos de Fe`}
+                              </span>
+                            </div>
+                          )}
+
+                          {(assignment.punishments || assignment.punishment_faith_points > 0) && (
+                            <div className="flex items-center gap-2 p-2 bg-wine/5 rounded-sm">
+                              <AlertTriangle className="w-3 h-3 text-wine shrink-0" />
+                              <span className="text-xs text-muted-foreground">Consecuencia:</span>
+                              <span className="text-xs text-foreground">
+                                {assignment.punishments?.name}
+                                {assignment.punishments?.name && assignment.punishment_faith_points > 0 && " + "}
+                                {assignment.punishment_faith_points > 0 && `-${assignment.punishment_faith_points} Puntos de Fe`}
+                              </span>
+                            </div>
+                          )}
+
+                          {assignment.evidence_url && (
+                            <a
+                              href={assignment.evidence_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-gold hover:text-gold/80 transition-colors flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              Ver evidencia
+                            </a>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
-                </div>
-
-                {isDeity && (
-                  <>
-                    <Separator className="bg-border/40" />
-
-                    {/* Sección: Asignar Nueva Tarea */}
-                    <div className="space-y-4">
-                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Asignar Nueva Tarea</h3>
-                      
-                      <div className="flex gap-2">
-                        <RitualButton
-                          variant={assignMode === "library" ? "gold" : "outline"}
-                          onClick={() => setAssignMode("library")}
-                          className="flex-1"
-                        >
-                          Biblioteca
-                        </RitualButton>
-                        <RitualButton
-                          variant={assignMode === "custom" ? "gold" : "outline"}
-                          onClick={() => setAssignMode("custom")}
-                          className="flex-1"
-                        >
-                          Personalizada
-                        </RitualButton>
-                      </div>
-
-                      {assignMode === "library" && (
-                        <div className="space-y-3">
-                          {libraryTasks.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              No hay tareas en la biblioteca
-                            </p>
-                          ) : (
-                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                              {libraryTasks.map((task) => (
-                                <div key={task.id} className="p-3 bg-background/60 rounded-sm border border-border/30 hover:border-gold/40 transition-colors">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1">
-                                      <p className="font-heading text-sm text-foreground">{task.title}</p>
-                                      {task.description && (
-                                        <p className="text-xs text-muted-foreground mt-1">{task.description}</p>
-                                      )}
-                                      <div className="flex gap-2 mt-2">
-                                        {task.faith_points_reward > 0 && (
-                                          <Badge variant="outline" className="text-xs bg-gold/10 text-gold">
-                                            +{task.faith_points_reward} PF
-                                          </Badge>
-                                        )}
-                                        {task.requires_evidence && (
-                                          <Badge variant="outline" className="text-xs">Requiere evidencia</Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <RitualButton
-                                      variant="outline"
-                                      onClick={() => assignTaskFromLibrary(task)}
-                                      className="shrink-0"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                    </RitualButton>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {assignMode === "custom" && (
-                        <div className="space-y-3">
-                          <Input
-                            placeholder="Título de la tarea"
-                            value={customTaskForm.title}
-                            onChange={(e) => setCustomTaskForm({ ...customTaskForm, title: e.target.value })}
-                          />
-                          <Textarea
-                            placeholder="Descripción (opcional)"
-                            value={customTaskForm.description}
-                            onChange={(e) => setCustomTaskForm({ ...customTaskForm, description: e.target.value })}
-                            rows={3}
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Puntos de Fe"
-                            value={customTaskForm.faith_points}
-                            onChange={(e) => setCustomTaskForm({ ...customTaskForm, faith_points: parseInt(e.target.value) || 0 })}
-                          />
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={customTaskForm.requires_evidence}
-                              onChange={(e) => setCustomTaskForm({ ...customTaskForm, requires_evidence: e.target.checked })}
-                              className="w-4 h-4"
-                            />
-                            <span className="text-sm text-foreground">Requiere evidencia fotográfica</span>
-                          </label>
-                          <RitualButton
-                            variant="gold"
-                            onClick={assignCustomTask}
-                            disabled={!customTaskForm.title.trim()}
-                            className="w-full"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Asignar Tarea Personalizada
-                          </RitualButton>
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator className="bg-border/40" />
-
-                    {/* Sección: Premios Asignados */}
-                    <div className="space-y-3">
-                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Premios Asignados</h3>
-                      {followerRewards.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          No hay premios asignados
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {followerRewards.map((ar) => (
-                            <div key={ar.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <p className="font-heading text-sm text-foreground">{ar.rewards?.name || "Premio eliminado"}</p>
-                                  {ar.rewards?.description && (
-                                    <p className="text-xs text-muted-foreground mt-1">{ar.rewards.description}</p>
-                                  )}
-                                  <Badge variant={ar.is_redeemed ? "outline" : "default"} className="text-xs mt-2">
-                                    {ar.is_redeemed ? "Utilizado" : "Disponible"}
-                                  </Badge>
-                                </div>
-                                {!ar.is_redeemed && (
-                                  <button
-                                    onClick={() => {
-                                      if (confirm("¿Eliminar este premio?")) {
-                                        supabase.from("awarded_rewards").delete().eq("id", ar.id).then(() => {
-                                          toast({ title: "Premio eliminado" });
-                                          loadMemberData();
-                                        });
-                                      }
-                                    }}
-                                    className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator className="bg-border/40" />
-
-                    {/* Sección: Asignar Nuevo Premio */}
-                    <div className="space-y-4">
-                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Asignar Nuevo Premio</h3>
-                      
-                      <div className="flex gap-2">
-                        <RitualButton
-                          variant={rewardAssignMode === "library" ? "gold" : "outline"}
-                          onClick={() => setRewardAssignMode("library")}
-                          className="flex-1"
-                        >
-                          Biblioteca
-                        </RitualButton>
-                        <RitualButton
-                          variant={rewardAssignMode === "custom" ? "gold" : "outline"}
-                          onClick={() => setRewardAssignMode("custom")}
-                          className="flex-1"
-                        >
-                          Personalizado
-                        </RitualButton>
-                      </div>
-
-                      {rewardAssignMode === "library" && (
-                        <div className="space-y-3">
-                          {libraryRewards.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              No hay premios en la biblioteca
-                            </p>
-                          ) : (
-                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                              {libraryRewards.map((reward) => (
-                                <div key={reward.id} className="p-3 bg-background/60 rounded-sm border border-border/30 hover:border-gold/40 transition-colors">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1">
-                                      <p className="font-heading text-sm text-foreground">{reward.name}</p>
-                                      {reward.description && (
-                                        <p className="text-xs text-muted-foreground mt-1">{reward.description}</p>
-                                      )}
-                                      {reward.faith_points_cost > 0 && (
-                                        <Badge variant="outline" className="text-xs bg-gold/10 text-gold mt-2">
-                                          {reward.faith_points_cost} PF
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <RitualButton
-                                      variant="outline"
-                                      onClick={() => assignRewardFromLibrary(reward)}
-                                      className="shrink-0"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                    </RitualButton>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {rewardAssignMode === "custom" && (
-                        <div className="space-y-3">
-                          <Input
-                            placeholder="Nombre del premio"
-                            value={customRewardForm.name}
-                            onChange={(e) => setCustomRewardForm({ ...customRewardForm, name: e.target.value })}
-                          />
-                          <Textarea
-                            placeholder="Descripción (opcional)"
-                            value={customRewardForm.description}
-                            onChange={(e) => setCustomRewardForm({ ...customRewardForm, description: e.target.value })}
-                            rows={3}
-                          />
-                          <RitualButton
-                            variant="gold"
-                            onClick={assignCustomReward}
-                            disabled={!customRewardForm.name.trim()}
-                            className="w-full"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Asignar Premio Personalizado
-                          </RitualButton>
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator className="bg-border/40" />
-
-                    {/* Sección: Consecuencias Asignadas */}
-                    <div className="space-y-3">
-                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Consecuencias Asignadas</h3>
-                      {followerPunishments.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          No hay consecuencias asignadas
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {followerPunishments.map((ap) => (
-                            <div key={ap.id} className="p-3 bg-muted/20 rounded-sm border border-border/40">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <p className="font-heading text-sm text-foreground">{ap.punishments?.name || "Consecuencia eliminada"}</p>
-                                  {ap.punishments?.description && (
-                                    <p className="text-xs text-muted-foreground mt-1">{ap.punishments.description}</p>
-                                  )}
-                                  <div className="flex gap-2 mt-2">
-                                    <Badge variant={ap.is_removed ? "outline" : "default"} className="text-xs">
-                                      {ap.is_removed ? "Cumplida" : "Activa"}
-                                    </Badge>
-                                    {ap.punishments?.faith_points_cost > 0 && (
-                                      <Badge variant="outline" className="text-xs bg-wine/20 text-wine">
-                                        {ap.punishments.faith_points_cost} PF para quitar
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
-                                {!ap.is_removed && (
-                                  <button
-                                    onClick={() => {
-                                      if (confirm("¿Eliminar esta consecuencia?")) {
-                                        supabase.from("assigned_punishments").delete().eq("id", ap.id).then(() => {
-                                          toast({ title: "Consecuencia eliminada" });
-                                          loadMemberData();
-                                        });
-                                      }
-                                    }}
-                                    className="p-1.5 text-muted-foreground/30 hover:text-wine transition-colors"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator className="bg-border/40" />
-
-                    {/* Sección: Asignar Nueva Consecuencia */}
-                    <div className="space-y-4">
-                      <h3 className="font-heading text-sm text-gold uppercase tracking-wide">Asignar Nueva Consecuencia</h3>
-                      
-                      <div className="flex gap-2">
-                        <RitualButton
-                          variant={punishmentAssignMode === "library" ? "gold" : "outline"}
-                          onClick={() => setPunishmentAssignMode("library")}
-                          className="flex-1"
-                        >
-                          Biblioteca
-                        </RitualButton>
-                        <RitualButton
-                          variant={punishmentAssignMode === "custom" ? "gold" : "outline"}
-                          onClick={() => setPunishmentAssignMode("custom")}
-                          className="flex-1"
-                        >
-                          Personalizada
-                        </RitualButton>
-                      </div>
-
-                      {punishmentAssignMode === "library" && (
-                        <div className="space-y-3">
-                          {libraryPunishments.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              No hay consecuencias en la biblioteca
-                            </p>
-                          ) : (
-                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                              {libraryPunishments.map((punishment) => (
-                                <div key={punishment.id} className="p-3 bg-background/60 rounded-sm border border-border/30 hover:border-gold/40 transition-colors">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1">
-                                      <p className="font-heading text-sm text-foreground">{punishment.name}</p>
-                                      {punishment.description && (
-                                        <p className="text-xs text-muted-foreground mt-1">{punishment.description}</p>
-                                      )}
-                                      {punishment.faith_points_cost > 0 && (
-                                        <Badge variant="outline" className="text-xs bg-wine/20 text-wine mt-2">
-                                          {punishment.faith_points_cost} PF para quitar
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <RitualButton
-                                      variant="outline"
-                                      onClick={() => assignPunishmentFromLibrary(punishment)}
-                                      className="shrink-0"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                    </RitualButton>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {punishmentAssignMode === "custom" && (
-                        <div className="space-y-3">
-                          <Input
-                            placeholder="Nombre de la consecuencia"
-                            value={customPunishmentForm.name}
-                            onChange={(e) => setCustomPunishmentForm({ ...customPunishmentForm, name: e.target.value })}
-                          />
-                          <Textarea
-                            placeholder="Descripción (opcional)"
-                            value={customPunishmentForm.description}
-                            onChange={(e) => setCustomPunishmentForm({ ...customPunishmentForm, description: e.target.value })}
-                            rows={3}
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Puntos de Fe para quitar"
-                            value={customPunishmentForm.faith_points}
-                            onChange={(e) => setCustomPunishmentForm({ ...customPunishmentForm, faith_points: parseInt(e.target.value) || 0 })}
-                          />
-                          <RitualButton
-                            variant="gold"
-                            onClick={assignCustomPunishment}
-                            disabled={!customPunishmentForm.name.trim()}
-                            className="w-full"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Asignar Consecuencia Personalizada
-                          </RitualButton>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
+                </ParchmentCard>
               </TabsContent>
 
               {/* Tab: Notas */}
