@@ -372,6 +372,45 @@ export type Database = {
         }
         Relationships: []
       }
+      favor_points: {
+        Row: {
+          deity_id: string
+          follower_id: string
+          id: string
+          points: number
+          updated_at: string | null
+        }
+        Insert: {
+          deity_id: string
+          follower_id: string
+          id?: string
+          points?: number
+          updated_at?: string | null
+        }
+        Update: {
+          deity_id?: string
+          follower_id?: string
+          id?: string
+          points?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favor_points_deity_id_fkey"
+            columns: ["deity_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favor_points_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fetish_ratings: {
         Row: {
           created_at: string | null

@@ -147,6 +147,15 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [lockDays, setLockDays] = useState(0);
   const [lockMinutes, setLockMinutes] = useState(0);
   
+  const [faithPointsAdjustment, setFaithPointsAdjustment] = useState(0);
+  const [faithReason, setFaithReason] = useState("");
+  const [showFaithDialog, setShowFaithDialog] = useState(false);
+  
+  const [favorPoints, setFavorPoints] = useState<any[]>([]);
+  const [myFavorRating, setMyFavorRating] = useState(50);
+  const [showAllFavor, setShowAllFavor] = useState(false);
+  const [isAdjustingFavor, setIsAdjustingFavor] = useState(false);
+  
   const [faithPoints, setFaithPoints] = useState(0);
   const [isAdjustingFaith, setIsAdjustingFaith] = useState(false);
 
@@ -163,7 +172,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
   useEffect(() => {
     if (member) {
-      setFaithPoints(member.faith_points || 0);
       setTitleInput(member.title || "");
     }
   }, [member]);
@@ -251,6 +259,36 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         .order("created_at", { ascending: false })
         .limit(10);
       setFaithLog(faithData || []);
+
+      // Cargar puntos de favor
+      if (isDeity) {
+        const { data: favorData } = await supabase
+          .from("favor_points")
+          .select("*, profiles!favor_points_deity_id_fkey(display_name, avatar_url)")
+          .eq("follower_id", memberId);
+        setFavorPoints(favorData || []);
+
+        // Encontrar mi rating de favor
+        const myRating = favorData?.find((f) => f.deity_id === user?.id);
+        if (myRating) {
+          setMyFavorRating(myRating.points);
+        } else {
+          // Crear rating inicial si no existe
+          const { data: newRating } = await supabase
+            .from("favor_points")
+            .insert({
+              deity_id: user?.id,
+              follower_id: memberId,
+              points: 50,
+            })
+            .select()
+            .single();
+          if (newRating) {
+            setMyFavorRating(50);
+            setFavorPoints([...(favorData || []), newRating]);
+          }
+        }
+      }
 
     } catch (error) {
       console.error("Error loading member data:", error);
@@ -675,18 +713,23 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     }
   };
 
-  const updateFaithPoints = async (newValue: number) => {
-    if (!memberId || !isDeity) return;
+  const adjustFaithPoints = async (delta: number, reason: string) => {
+    if (!memberId || !isDeity || delta === 0) return;
 
-    const delta = newValue - (member?.faith_points || 0);
-    if (delta === 0) return;
+    const newTotal = (member?.faith_points || 0) + delta;
+    if (newTotal < 0) {
+      toast({
+        title: "Error",
+        description: "Los puntos de fe no pueden ser negativos",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
-      setIsAdjustingFaith(true);
-      
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ faith_points: newValue })
+        .update({ faith_points: newTotal })
         .eq("id", memberId);
 
       if (updateError) throw updateError;
@@ -696,8 +739,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         user_id: memberId,
         deity_id: user?.id,
         amount: delta,
-        balance_after: newValue,
-        reason: delta > 0 ? "Ajuste manual (concedido)" : "Ajuste manual (revocado)",
+        balance_after: newTotal,
+        reason: reason || (delta > 0 ? "Concedido por deidad" : "Revocado por deidad"),
         transaction_type: delta > 0 ? "grant" : "revoke",
       });
 
@@ -706,16 +749,52 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         description: `${delta > 0 ? "+" : ""}${delta} Puntos de Fe`
       });
       
+      setShowFaithDialog(false);
+      setFaithPointsAdjustment(0);
+      setFaithReason("");
       loadMemberData();
     } catch (error) {
-      console.error("Error updating faith points:", error);
+      console.error("Error adjusting faith points:", error);
       toast({
         title: "Error",
-        description: "No se pudieron actualizar los puntos de fe",
+        description: "No se pudieron ajustar los puntos de fe",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateFavorPoints = async (newValue: number) => {
+    if (!memberId || !user?.id || !isDeity) return;
+
+    try {
+      setIsAdjustingFavor(true);
+      
+      const { error } = await supabase
+        .from("favor_points")
+        .update({ points: newValue, updated_at: new Date().toISOString() })
+        .eq("deity_id", user.id)
+        .eq("follower_id", memberId);
+
+      if (error) throw error;
+
+      setMyFavorRating(newValue);
+      toast({ title: "Puntos de favor actualizados" });
+      
+      // Recargar favor points
+      const { data: favorData } = await supabase
+        .from("favor_points")
+        .select("*, profiles!favor_points_deity_id_fkey(display_name, avatar_url)")
+        .eq("follower_id", memberId);
+      setFavorPoints(favorData || []);
+    } catch (error) {
+      console.error("Error updating favor points:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar los puntos de favor",
         variant: "destructive",
       });
     } finally {
-      setIsAdjustingFaith(false);
+      setIsAdjustingFavor(false);
     }
   };
 
@@ -856,7 +935,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                 </div>
               </div>
 
-              {/* Barra de Puntos de Fe (solo para deidades) */}
+              {/* Puntos de Fe (solo para deidades) */}
               {isDeity && (
                 <div className="space-y-3 p-4 bg-muted/20 rounded-sm border border-border/30">
                   <div className="flex items-center justify-between">
@@ -864,37 +943,114 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                       <Sparkles className="w-4 h-4 text-gold" />
                       <span className="font-heading text-sm text-foreground">Puntos de Fe</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={faithPoints}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setFaithPoints(Math.max(0, Math.min(100, val)));
-                        }}
-                        onBlur={() => updateFaithPoints(faithPoints)}
-                        className="w-16 h-7 text-center text-sm"
-                        disabled={isAdjustingFaith}
-                        min={0}
-                        max={100}
-                      />
-                      <span className="font-mono text-sm text-muted-foreground">/ 100</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-display text-2xl text-gold">
+                        {member.faith_points || 0}
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setShowFaithDialog(true)}
+                          className="p-1.5 bg-gold/20 hover:bg-gold/30 rounded-sm border border-gold/40 transition-colors"
+                        >
+                          <Plus className="w-4 h-4 text-gold" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFaithPointsAdjustment(-1);
+                            setShowFaithDialog(true);
+                          }}
+                          className="p-1.5 bg-wine/20 hover:bg-wine/30 rounded-sm border border-wine/40 transition-colors"
+                        >
+                          <svg className="w-4 h-4 text-wine" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <HeartCrack className="w-5 h-5 text-wine/60 shrink-0" />
-                    <Slider
-                      value={[faithPoints]}
-                      onValueChange={([val]) => setFaithPoints(val)}
-                      onValueCommit={([val]) => updateFaithPoints(val)}
-                      max={100}
-                      step={1}
-                      className="flex-1"
-                      disabled={isAdjustingFaith}
-                    />
-                    <Heart className="w-5 h-5 text-gold shrink-0" />
+                </div>
+              )}
+
+              {/* Puntos de Favor (solo para deidades) */}
+              {isDeity && (
+                <div className="space-y-2 p-4 bg-muted/20 rounded-sm border border-border/30">
+                  <button
+                    onClick={() => setShowAllFavor(!showAllFavor)}
+                    className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-wine" />
+                      <span className="font-heading text-sm text-foreground">Puntos de Favor</span>
+                    </div>
+                    <svg
+                      className={`w-4 h-4 text-muted-foreground transition-transform ${showAllFavor ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Mi rating de favor (siempre visible) */}
+                  <div className="pt-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Mi valoración</span>
+                      <span className="font-mono text-sm text-foreground">{myFavorRating} / 100</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <HeartCrack className="w-4 h-4 text-wine/60 shrink-0" />
+                      <Slider
+                        value={[myFavorRating]}
+                        onValueChange={([val]) => setMyFavorRating(val)}
+                        onValueCommit={([val]) => updateFavorPoints(val)}
+                        max={100}
+                        step={1}
+                        className="flex-1"
+                        disabled={isAdjustingFavor}
+                      />
+                      <Heart className="w-4 h-4 text-gold shrink-0" />
+                    </div>
                   </div>
+
+                  {/* Otras deidades (desplegable) */}
+                  {showAllFavor && favorPoints.filter((f) => f.deity_id !== user?.id).length > 0 && (
+                    <div className="pt-3 border-t border-border/30 space-y-3">
+                      <p className="text-xs text-muted-foreground">Valoraciones de otras deidades</p>
+                      {favorPoints
+                        .filter((f) => f.deity_id !== user?.id)
+                        .map((favor) => (
+                          <div key={favor.id} className="space-y-2 p-2 bg-background/50 rounded-sm">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Avatar className="w-5 h-5">
+                                  <AvatarImage src={favor.profiles?.avatar_url || undefined} />
+                                  <AvatarFallback className="text-[10px]">
+                                    {favor.profiles?.display_name?.[0] || "?"}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs text-foreground">
+                                  {favor.profiles?.display_name || "Deidad"}
+                                </span>
+                              </div>
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {favor.points} / 100
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <HeartCrack className="w-3 h-3 text-wine/60 shrink-0" />
+                              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-wine via-gold/50 to-gold transition-all"
+                                  style={{ width: `${favor.points}%` }}
+                                />
+                              </div>
+                              <Heart className="w-3 h-3 text-gold shrink-0" />
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -911,6 +1067,83 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                 </div>
               )}
             </SheetHeader>
+
+            {/* Dialog para ajustar puntos de fe */}
+            {showFaithDialog && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFaithDialog(false)}>
+                <div className="bg-background border border-border rounded-sm p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="font-heading text-lg text-foreground mb-4">
+                    {faithPointsAdjustment >= 0 ? "Conceder" : "Revocar"} Puntos de Fe
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">Cantidad</label>
+                      <Input
+                        type="number"
+                        value={Math.abs(faithPointsAdjustment)}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setFaithPointsAdjustment(faithPointsAdjustment < 0 ? -Math.abs(val) : Math.abs(val));
+                        }}
+                        placeholder="0"
+                        min={0}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">Motivo (opcional)</label>
+                      <Textarea
+                        value={faithReason}
+                        onChange={(e) => setFaithReason(e.target.value)}
+                        placeholder="Ej: Completó todas las tareas del mes"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="p-3 bg-muted/20 rounded-sm">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Total actual:</span>
+                        <span className="font-mono text-foreground">{member?.faith_points || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm mt-1">
+                        <span className="text-muted-foreground">Cambio:</span>
+                        <span className={`font-mono ${faithPointsAdjustment >= 0 ? 'text-gold' : 'text-wine'}`}>
+                          {faithPointsAdjustment >= 0 ? '+' : ''}{faithPointsAdjustment}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm mt-1 pt-2 border-t border-border/30">
+                        <span className="text-foreground font-heading">Nuevo total:</span>
+                        <span className="font-mono font-bold text-foreground">
+                          {(member?.faith_points || 0) + faithPointsAdjustment}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <RitualButton
+                        variant={faithPointsAdjustment >= 0 ? "gold" : "outline"}
+                        onClick={() => adjustFaithPoints(faithPointsAdjustment, faithReason)}
+                        className="flex-1"
+                        disabled={faithPointsAdjustment === 0}
+                      >
+                        {faithPointsAdjustment >= 0 ? "Conceder" : "Revocar"}
+                      </RitualButton>
+                      <RitualButton
+                        variant="outline"
+                        onClick={() => {
+                          setShowFaithDialog(false);
+                          setFaithPointsAdjustment(0);
+                          setFaithReason("");
+                        }}
+                      >
+                        Cancelar
+                      </RitualButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Dialog para configurar lock del título */}
             {showLockDialog && (
