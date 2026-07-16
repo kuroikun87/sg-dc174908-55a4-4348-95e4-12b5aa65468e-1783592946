@@ -147,9 +147,16 @@ export type Database = {
           assigned_by: string
           completed_at: string | null
           created_at: string | null
+          deity_timezone: string | null
+          due_date: string | null
           evidence_url: string | null
           follower_id: string
+          follower_timezone: string | null
           id: string
+          punishment_faith_points: number | null
+          punishment_id: string | null
+          reward_faith_points: number | null
+          reward_id: string | null
           status: string | null
           task_id: string
         }
@@ -157,9 +164,16 @@ export type Database = {
           assigned_by: string
           completed_at?: string | null
           created_at?: string | null
+          deity_timezone?: string | null
+          due_date?: string | null
           evidence_url?: string | null
           follower_id: string
+          follower_timezone?: string | null
           id?: string
+          punishment_faith_points?: number | null
+          punishment_id?: string | null
+          reward_faith_points?: number | null
+          reward_id?: string | null
           status?: string | null
           task_id: string
         }
@@ -167,13 +181,34 @@ export type Database = {
           assigned_by?: string
           completed_at?: string | null
           created_at?: string | null
+          deity_timezone?: string | null
+          due_date?: string | null
           evidence_url?: string | null
           follower_id?: string
+          follower_timezone?: string | null
           id?: string
+          punishment_faith_points?: number | null
+          punishment_id?: string | null
+          reward_faith_points?: number | null
+          reward_id?: string | null
           status?: string | null
           task_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "assigned_tasks_punishment_id_fkey"
+            columns: ["punishment_id"]
+            isOneToOne: false
+            referencedRelation: "punishments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_tasks_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "rewards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "assigned_tasks_task_id_fkey"
             columns: ["task_id"]
@@ -592,6 +627,7 @@ export type Database = {
           pronouns: string | null
           rank_id: string | null
           role: string | null
+          timezone: string | null
           title: string | null
           title_locked_by: string | null
           title_locked_until: string | null
@@ -613,6 +649,7 @@ export type Database = {
           pronouns?: string | null
           rank_id?: string | null
           role?: string | null
+          timezone?: string | null
           title?: string | null
           title_locked_by?: string | null
           title_locked_until?: string | null
@@ -634,6 +671,7 @@ export type Database = {
           pronouns?: string | null
           rank_id?: string | null
           role?: string | null
+          timezone?: string | null
           title?: string | null
           title_locked_by?: string | null
           title_locked_until?: string | null
@@ -909,7 +947,10 @@ export type Database = {
           description: string | null
           faith_points_reward: number | null
           id: string
+          recurrence_days: number[] | null
+          recurrence_type: string | null
           requires_evidence: boolean | null
+          time_limit: string | null
           title: string
         }
         Insert: {
@@ -918,7 +959,10 @@ export type Database = {
           description?: string | null
           faith_points_reward?: number | null
           id?: string
+          recurrence_days?: number[] | null
+          recurrence_type?: string | null
           requires_evidence?: boolean | null
+          time_limit?: string | null
           title: string
         }
         Update: {
@@ -927,7 +971,10 @@ export type Database = {
           description?: string | null
           faith_points_reward?: number | null
           id?: string
+          recurrence_days?: number[] | null
+          recurrence_type?: string | null
           requires_evidence?: boolean | null
+          time_limit?: string | null
           title?: string
         }
         Relationships: [
