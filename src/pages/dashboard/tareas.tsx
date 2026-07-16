@@ -7,7 +7,7 @@ import { BookPage } from "@/components/layout/BookPage";
 import { ParchmentCard } from "@/components/ui/parchment-card";
 import { RitualButton } from "@/components/ui/ritual-button";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Loader2, Upload, CheckCircle2, Clock, Sparkles, Camera, Plus } from "lucide-react";
+import { CheckSquare, Loader2, Upload, CheckCircle2, Clock, Sparkles, Camera, Plus, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,54 +49,69 @@ export default function TareasPage() {
     setIsLoading(true);
 
     try {
-      // Cargar tareas asignadas
-      const { data: assignedData } = await supabase
-        .from("assigned_tasks")
-        .select(`
-          *,
-          tasks(*),
-          profiles!assigned_tasks_follower_id_fkey(display_name, avatar_url),
-          rewards(name),
-          punishments(name)
-        `)
-        .eq("assigned_by", user?.id)
-        .order("created_at", { ascending: false });
-      setTasks(assignedData || []);
+      if (profile.role === "deity") {
+        // Cargar tareas asignadas por esta deidad
+        const { data: assignedData } = await supabase
+          .from("assigned_tasks")
+          .select(`
+            *,
+            tasks(*),
+            profiles!assigned_tasks_follower_id_fkey(display_name, avatar_url),
+            rewards(name),
+            punishments(name)
+          `)
+          .eq("assigned_by", user?.id)
+          .order("created_at", { ascending: false });
+        setTasks(assignedData || []);
 
-      // Cargar biblioteca de tareas
-      const { data: tasksData } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("cult_id", profile.cult_id)
-        .order("created_at", { ascending: false });
-      setTaskLibrary(tasksData || []);
+        // Cargar biblioteca de tareas
+        const { data: tasksData } = await supabase
+          .from("tasks")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .order("created_at", { ascending: false });
+        setTaskLibrary(tasksData || []);
 
-      // Cargar premios activos
-      const { data: rewardsData } = await supabase
-        .from("rewards")
-        .select("*")
-        .eq("cult_id", profile.cult_id)
-        .eq("is_active", true)
-        .order("name");
-      setRewards(rewardsData || []);
+        // Cargar premios activos
+        const { data: rewardsData } = await supabase
+          .from("rewards")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .eq("is_active", true)
+          .order("name");
+        setRewards(rewardsData || []);
 
-      // Cargar consecuencias activas
-      const { data: punishmentsData } = await supabase
-        .from("punishments")
-        .select("*")
-        .eq("cult_id", profile.cult_id)
-        .eq("is_active", true)
-        .order("name");
-      setPunishments(punishmentsData || []);
+        // Cargar consecuencias activas
+        const { data: punishmentsData } = await supabase
+          .from("punishments")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .eq("is_active", true)
+          .order("name");
+        setPunishments(punishmentsData || []);
 
-      // Cargar fieles del culto
-      const { data: followersData } = await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url, timezone")
-        .eq("cult_id", profile.cult_id)
-        .eq("role", "follower")
-        .order("display_name");
-      setFollowers(followersData || []);
+        // Cargar fieles del culto
+        const { data: followersData } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url, timezone")
+          .eq("cult_id", profile.cult_id)
+          .eq("role", "follower")
+          .order("display_name");
+        setFollowers(followersData || []);
+      } else {
+        // Cargar tareas asignadas a este fiel
+        const { data: assignedData } = await supabase
+          .from("assigned_tasks")
+          .select(`
+            *,
+            tasks(*),
+            rewards(name),
+            punishments(name)
+          `)
+          .eq("follower_id", user?.id)
+          .order("created_at", { ascending: false });
+        setTasks(assignedData || []);
+      }
 
     } catch (error) {
       console.error("Error loading data:", error);
@@ -604,6 +619,212 @@ export default function TareasPage() {
                 </div>
               </div>
             </ParchmentCard>
+          )}
+
+          {/* Lista de tareas asignadas (solo deidades) */}
+          {profile?.role === "deity" && tasks.length > 0 && (
+            <ParchmentCard title="Tareas Asignadas" icon={<CheckSquare className="w-4 h-4" />}>
+              <div className="space-y-3">
+                {tasks.map((assignment) => (
+                  <div
+                    key={assignment.id}
+                    className="p-4 bg-background/50 rounded-sm border border-border/30 space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <h3 className="font-heading text-base text-foreground">
+                          {assignment.tasks?.title || "Tarea"}
+                        </h3>
+                        {assignment.tasks?.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {assignment.tasks.description}
+                          </p>
+                        )}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`shrink-0 ${
+                          assignment.status === "completed"
+                            ? "border-gold/40 bg-gold/10 text-gold"
+                            : assignment.status === "failed"
+                            ? "border-wine/40 bg-wine/10 text-wine"
+                            : "border-border/40 bg-muted/10 text-muted-foreground"
+                        }`}
+                      >
+                        {assignment.status === "completed" ? "Completada" : assignment.status === "failed" ? "Fallida" : "Pendiente"}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Asignada a:</span>
+                      <span className="text-sm text-foreground">
+                        {assignment.profiles?.display_name || "Sin nombre"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Tipo: </span>
+                        <span className="text-foreground">
+                          {assignment.tasks?.recurrence_type === "once"
+                            ? "Única"
+                            : assignment.tasks?.recurrence_type === "daily"
+                            ? "Diaria"
+                            : "Semanal"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Límite: </span>
+                        <span className="text-foreground">
+                          {assignment.due_date
+                            ? new Date(assignment.due_date).toLocaleString()
+                            : assignment.tasks?.time_limit || "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {(assignment.rewards || assignment.reward_faith_points > 0) && (
+                      <div className="flex items-center gap-2 p-2 bg-gold/5 rounded-sm">
+                        <Sparkles className="w-3 h-3 text-gold shrink-0" />
+                        <span className="text-xs text-muted-foreground">Premio:</span>
+                        <span className="text-xs text-foreground">
+                          {assignment.rewards?.name}
+                          {assignment.rewards?.name && assignment.reward_faith_points > 0 && " + "}
+                          {assignment.reward_faith_points > 0 && `${assignment.reward_faith_points} Puntos de Fe`}
+                        </span>
+                      </div>
+                    )}
+
+                    {(assignment.punishments || assignment.punishment_faith_points > 0) && (
+                      <div className="flex items-center gap-2 p-2 bg-wine/5 rounded-sm">
+                        <AlertTriangle className="w-3 h-3 text-wine shrink-0" />
+                        <span className="text-xs text-muted-foreground">Consecuencia:</span>
+                        <span className="text-xs text-foreground">
+                          {assignment.punishments?.name}
+                          {assignment.punishments?.name && assignment.punishment_faith_points > 0 && " + "}
+                          {assignment.punishment_faith_points > 0 && `-${assignment.punishment_faith_points} Puntos de Fe`}
+                        </span>
+                      </div>
+                    )}
+
+                    {assignment.evidence_url && (
+                      <div className="flex items-center gap-2">
+                        <Camera className="w-3 h-3 text-gold" />
+                        <a
+                          href={assignment.evidence_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-gold hover:text-gold/80 transition-colors"
+                        >
+                          Ver evidencia
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ParchmentCard>
+          )}
+
+          {/* Lista de tareas del fiel */}
+          {profile?.role === "follower" && tasks.length > 0 && (
+            <ParchmentCard title="Mis Tareas" icon={<CheckSquare className="w-4 h-4" />}>
+              <div className="space-y-3">
+                {tasks.map((assignment) => (
+                  <div
+                    key={assignment.id}
+                    className="p-4 bg-background/50 rounded-sm border border-border/30 space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <h3 className="font-heading text-base text-foreground">
+                          {assignment.tasks?.title || "Tarea"}
+                        </h3>
+                        {assignment.tasks?.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {assignment.tasks.description}
+                          </p>
+                        )}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`shrink-0 ${
+                          assignment.status === "completed"
+                            ? "border-gold/40 bg-gold/10 text-gold"
+                            : assignment.status === "failed"
+                            ? "border-wine/40 bg-wine/10 text-wine"
+                            : "border-border/40 bg-muted/10 text-muted-foreground"
+                        }`}
+                      >
+                        {assignment.status === "completed" ? "Completada" : assignment.status === "failed" ? "Fallida" : "Pendiente"}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <Clock className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        {assignment.due_date
+                          ? `Fecha límite: ${new Date(assignment.due_date).toLocaleString()}`
+                          : assignment.tasks?.time_limit
+                          ? `Horario límite: ${assignment.tasks.time_limit}`
+                          : "Sin límite"}
+                      </span>
+                    </div>
+
+                    {assignment.status === "pending" && (
+                      <div className="space-y-2">
+                        {assignment.tasks?.requires_evidence && !assignment.evidence_url && (
+                          <div className="space-y-2">
+                            <label className="text-xs text-muted-foreground">Subir evidencia (requerida)</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) uploadEvidence(assignment.id, file);
+                              }}
+                              disabled={!!uploading}
+                              className="w-full text-xs"
+                            />
+                          </div>
+                        )}
+                        <RitualButton
+                          variant="gold"
+                          onClick={() => completeTask(assignment.id, assignment.reward_faith_points || 0)}
+                          disabled={assignment.tasks?.requires_evidence && !assignment.evidence_url}
+                          className="w-full"
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Completar Tarea
+                        </RitualButton>
+                      </div>
+                    )}
+
+                    {assignment.evidence_url && (
+                      <div className="flex items-center gap-2">
+                        <Camera className="w-3 h-3 text-gold" />
+                        <a
+                          href={assignment.evidence_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-gold hover:text-gold/80 transition-colors"
+                        >
+                          Ver evidencia subida
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ParchmentCard>
+          )}
+
+          {tasks.length === 0 && !showTaskForm && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                {profile?.role === "deity" ? "No hay tareas asignadas" : "No tienes tareas pendientes"}
+              </p>
+            </div>
           )}
         </div>
       </BookPage>
