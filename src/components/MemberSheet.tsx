@@ -162,10 +162,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [taskForm, setTaskForm] = useState({
+    task_id: "", // Para seleccionar de biblioteca
     title: "",
     description: "",
     requires_evidence: false,
-    recurrence_type: "once" as "once" | "daily" | "weekly",
+    recurrence_type: "once" as "once" | "daily" | "weekly" | "monthly",
     recurrence_days: [] as number[],
     time_limit: "",
     due_date: "",
@@ -174,6 +175,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     punishment_id: "",
     punishment_faith_points: 0,
   });
+  const [taskMode, setTaskMode] = useState<"library" | "custom">("library");
+  const [taskLibrary, setTaskLibrary] = useState<any[]>([]);
   const [rewards, setRewards] = useState<any[]>([]);
   const [punishments, setPunishments] = useState<any[]>([]);
 
@@ -342,6 +345,14 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .eq("is_active", true)
           .order("name");
         setPunishments(punishmentsData || []);
+
+        // Cargar biblioteca de tareas
+        const { data: tasksLibrary } = await supabase
+          .from("tasks")
+          .select("*")
+          .eq("cult_id", profileData.cult_id)
+          .order("created_at", { ascending: false });
+        setTaskLibrary(tasksLibrary || []);
       }
 
     } catch (error) {
@@ -896,10 +907,29 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   };
 
   const saveTask = async () => {
-    if (!profile?.cult_id || !taskForm.title.trim() || !memberId) {
+    if (!profile?.cult_id || !memberId) {
       toast({
         title: "Error",
         description: "Complete todos los campos requeridos",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar según modo
+    if (taskMode === "library" && !taskForm.task_id) {
+      toast({
+        title: "Error",
+        description: "Seleccione una tarea de la biblioteca",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (taskMode === "custom" && !taskForm.title.trim()) {
+      toast({
+        title: "Error",
+        description: "El título es requerido",
         variant: "destructive",
       });
       return;
@@ -915,7 +945,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       return;
     }
 
-    if ((taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly") && !taskForm.time_limit) {
+    if ((taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly" || taskForm.recurrence_type === "monthly") && !taskForm.time_limit) {
       toast({
         title: "Error",
         description: "Las tareas recurrentes requieren horario límite",
@@ -934,28 +964,33 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     }
 
     try {
-      // Crear tarea en biblioteca
-      const { data: newTask, error: taskError } = await supabase
-        .from("tasks")
-        .insert({
-          cult_id: profile.cult_id,
-          title: taskForm.title,
-          description: taskForm.description || null,
-          requires_evidence: taskForm.requires_evidence,
-          recurrence_type: taskForm.recurrence_type,
-          recurrence_days: taskForm.recurrence_type === "weekly" ? taskForm.recurrence_days : null,
-          time_limit: taskForm.time_limit || null,
-        })
-        .select()
-        .single();
+      let taskId = taskForm.task_id;
 
-      if (taskError) throw taskError;
+      // Si es personalizada, crear en biblioteca primero
+      if (taskMode === "custom") {
+        const { data: newTask, error: taskError } = await supabase
+          .from("tasks")
+          .insert({
+            cult_id: profile.cult_id,
+            title: taskForm.title,
+            description: taskForm.description || null,
+            requires_evidence: taskForm.requires_evidence,
+            recurrence_type: taskForm.recurrence_type,
+            recurrence_days: taskForm.recurrence_type === "weekly" ? taskForm.recurrence_days : null,
+            time_limit: taskForm.time_limit || null,
+          })
+          .select()
+          .single();
+
+        if (taskError) throw taskError;
+        taskId = newTask.id;
+      }
 
       // Asignar al fiel
       const { error: assignError } = await supabase
         .from("assigned_tasks")
         .insert({
-          task_id: newTask.id,
+          task_id: taskId,
           follower_id: memberId,
           assigned_by: user?.id,
           due_date: taskForm.recurrence_type === "once" ? taskForm.due_date : null,
@@ -973,6 +1008,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       setShowTaskForm(false);
       setTaskForm({
+        task_id: "",
         title: "",
         description: "",
         requires_evidence: false,
@@ -985,6 +1021,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         punishment_id: "",
         punishment_faith_points: 0,
       });
+      setTaskMode("library");
       loadMemberData();
     } catch (error) {
       console.error("Error saving task:", error);
@@ -1745,34 +1782,104 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                 {showTaskForm && (
                   <ParchmentCard title="Nueva Tarea" icon={<Plus className="w-4 h-4" />}>
                     <div className="space-y-4">
+                      {/* Selector de modo */}
                       <div className="space-y-2">
-                        <label className="text-sm text-muted-foreground">Título *</label>
-                        <Input
-                          value={taskForm.title}
-                          onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                          placeholder="Título de la tarea"
-                        />
+                        <label className="text-sm text-muted-foreground">Origen de la tarea</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => setTaskMode("library")}
+                            className={`p-3 rounded-sm border text-sm transition-all ${
+                              taskMode === "library"
+                                ? "border-silver bg-silver/10 text-silver"
+                                : "border-border/30 hover:border-silver/40"
+                            }`}
+                          >
+                            Biblioteca
+                          </button>
+                          <button
+                            onClick={() => setTaskMode("custom")}
+                            className={`p-3 rounded-sm border text-sm transition-all ${
+                              taskMode === "custom"
+                                ? "border-silver bg-silver/10 text-silver"
+                                : "border-border/30 hover:border-silver/40"
+                            }`}
+                          >
+                            Personalizada
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="text-sm text-muted-foreground">Descripción</label>
-                        <Textarea
-                          value={taskForm.description}
-                          onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-                          placeholder="Descripción detallada..."
-                          rows={3}
-                        />
-                      </div>
+                      {/* Selector de tarea de biblioteca */}
+                      {taskMode === "library" && (
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Seleccionar tarea *</label>
+                          <select
+                            value={taskForm.task_id}
+                            onChange={(e) => {
+                              const selectedTask = taskLibrary.find(t => t.id === e.target.value);
+                              setTaskForm({
+                                ...taskForm,
+                                task_id: e.target.value,
+                                requires_evidence: selectedTask?.requires_evidence || false,
+                              });
+                            }}
+                            className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
+                          >
+                            <option value="">Seleccione una tarea...</option>
+                            {taskLibrary.map((task) => (
+                              <option key={task.id} value={task.id}>
+                                {task.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Campos de tarea personalizada */}
+                      {taskMode === "custom" && (
+                        <>
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Título *</label>
+                            <Input
+                              value={taskForm.title}
+                              onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                              placeholder="Título de la tarea"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Descripción</label>
+                            <Textarea
+                              value={taskForm.description}
+                              onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                              placeholder="Descripción detallada..."
+                              rows={3}
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-sm">
+                            <Checkbox
+                              checked={taskForm.requires_evidence}
+                              onCheckedChange={(checked) =>
+                                setTaskForm({ ...taskForm, requires_evidence: checked as boolean })
+                              }
+                            />
+                            <label className="text-sm text-foreground">Requiere evidencia fotográfica</label>
+                          </div>
+                        </>
+                      )}
+
+                      <Separator className="my-4" />
 
                       <div className="space-y-2">
-                        <label className="text-sm text-muted-foreground">Tipo de tarea *</label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <label className="text-sm text-muted-foreground">Frecuencia *</label>
+                        <div className="grid grid-cols-4 gap-2">
                           <button
                             onClick={() => setTaskForm({ ...taskForm, recurrence_type: "once" })}
                             className={`p-3 rounded-sm border text-sm transition-all ${
                               taskForm.recurrence_type === "once"
-                                ? "border-gold bg-gold/10 text-gold"
-                                : "border-border/30 hover:border-gold/40"
+                                ? "border-silver bg-silver/10 text-silver"
+                                : "border-border/30 hover:border-silver/40"
                             }`}
                           >
                             Única
@@ -1781,8 +1888,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                             onClick={() => setTaskForm({ ...taskForm, recurrence_type: "daily" })}
                             className={`p-3 rounded-sm border text-sm transition-all ${
                               taskForm.recurrence_type === "daily"
-                                ? "border-gold bg-gold/10 text-gold"
-                                : "border-border/30 hover:border-gold/40"
+                                ? "border-silver bg-silver/10 text-silver"
+                                : "border-border/30 hover:border-silver/40"
                             }`}
                           >
                             Diaria
@@ -1791,11 +1898,21 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                             onClick={() => setTaskForm({ ...taskForm, recurrence_type: "weekly" })}
                             className={`p-3 rounded-sm border text-sm transition-all ${
                               taskForm.recurrence_type === "weekly"
-                                ? "border-gold bg-gold/10 text-gold"
-                                : "border-border/30 hover:border-gold/40"
+                                ? "border-silver bg-silver/10 text-silver"
+                                : "border-border/30 hover:border-silver/40"
                             }`}
                           >
                             Semanal
+                          </button>
+                          <button
+                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "monthly" })}
+                            className={`p-3 rounded-sm border text-sm transition-all ${
+                              taskForm.recurrence_type === "monthly"
+                                ? "border-silver bg-silver/10 text-silver"
+                                : "border-border/30 hover:border-silver/40"
+                            }`}
+                          >
+                            Mensual
                           </button>
                         </div>
                       </div>
@@ -1811,7 +1928,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         </div>
                       )}
 
-                      {(taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly") && (
+                      {(taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly" || taskForm.recurrence_type === "monthly") && (
                         <div className="space-y-2">
                           <label className="text-sm text-muted-foreground">Horario límite *</label>
                           <Input
@@ -1832,8 +1949,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                 onClick={() => toggleWeekDay(day.value)}
                                 className={`p-2 rounded-sm border text-xs font-heading transition-all ${
                                   taskForm.recurrence_days.includes(day.value)
-                                    ? "border-gold bg-gold/10 text-gold"
-                                    : "border-border/30 hover:border-gold/40"
+                                    ? "border-silver bg-silver/10 text-silver"
+                                    : "border-border/30 hover:border-silver/40"
                                 }`}
                               >
                                 {day.label}
@@ -1843,20 +1960,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-sm">
-                        <Checkbox
-                          checked={taskForm.requires_evidence}
-                          onCheckedChange={(checked) =>
-                            setTaskForm({ ...taskForm, requires_evidence: checked as boolean })
-                          }
-                        />
-                        <label className="text-sm text-foreground">Requiere evidencia fotográfica</label>
-                      </div>
-
                       <Separator className="my-4" />
 
                       <div className="space-y-3">
-                        <h4 className="font-heading text-sm text-gold">Premio al completar</h4>
+                        <h4 className="font-heading text-sm text-silver">Premio al completar</h4>
                         
                         <div className="space-y-2">
                           <label className="text-sm text-muted-foreground">Premio de la lista (opcional)</label>
@@ -1932,6 +2039,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                           onClick={() => {
                             setShowTaskForm(false);
                             setTaskForm({
+                              task_id: "",
                               title: "",
                               description: "",
                               requires_evidence: false,
@@ -1944,6 +2052,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                               punishment_id: "",
                               punishment_faith_points: 0,
                             });
+                            setTaskMode("library");
                           }}
                         >
                           Cancelar
@@ -2003,7 +2112,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                   ? "Única"
                                   : assignment.tasks?.recurrence_type === "daily"
                                   ? "Diaria"
-                                  : "Semanal"}
+                                  : assignment.tasks?.recurrence_type === "weekly"
+                                  ? "Semanal"
+                                  : "Mensual"}
                               </span>
                             </div>
                             <div>
