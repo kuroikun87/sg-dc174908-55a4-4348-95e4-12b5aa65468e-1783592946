@@ -483,11 +483,12 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         console.error("Error loading member data:", error);
         toast({
           title: "Error",
-          description: "No se pudo cargar la información del miembro",
+          description: "No se pudo cargar la información del fiel",
           variant: "destructive",
         });
       }
 
+      setIsLoading(false);
     } catch (error) {
       console.error("Error loading member data:", error);
       toast({
@@ -496,8 +497,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         variant: "destructive",
       });
     }
-
-    setIsLoading(false);
   };
 
   const assignTaskFromLibrary = async (task: Task) => {
