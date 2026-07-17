@@ -396,7 +396,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .order("created_at", { ascending: false });
         setNotes(notesData || []);
 
-        // Cargar prácticas del culto y las del usuario (disponible tanto para deidad como para el propio fiel)
+        // Cargar prácticas del culto y las del usuario
         const { data: practicesData } = await supabase
           .from("practices")
           .select("*")
@@ -410,50 +410,8 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .eq("user_id", memberId);
         setUserPractices(userPracticesData || []);
 
-        // Solo para deidades: cargar premios, consecuencias, títulos, etc.
+        // Cargar premios activos del fiel (solo para deidades)
         if (isDeity) {
-          // Cargar títulos globales del culto
-          const { data: cultTitlesData } = await supabase
-            .from("cult_titles")
-            .select("*")
-            .eq("cult_id", profileData.cult_id)
-            .order("name");
-          setGlobalTitles(cultTitlesData || []);
-
-          // Cargar títulos desbloqueados por este fiel
-          const { data: followerTitlesData } = await supabase
-            .from("follower_titles")
-            .select("title_id")
-            .eq("follower_id", memberId);
-          setUnlockedTitles(followerTitlesData?.map(ft => ft.title_id) || []);
-  
-          // Cargar premios activos
-          const { data: activeRewards } = await supabase
-            .from("rewards")
-            .select("*")
-            .eq("cult_id", profileData.cult_id)
-            .eq("is_active", true)
-            .order("name");
-          setRewards(activeRewards || []);
-
-          // Cargar consecuencias activas
-          const { data: activePunishments } = await supabase
-            .from("punishments")
-            .select("*")
-            .eq("cult_id", profileData.cult_id)
-            .eq("is_active", true)
-            .order("name");
-          setPunishments(activePunishments || []);
-
-          // Cargar biblioteca de tareas
-          const { data: tasksLibrary } = await supabase
-            .from("tasks")
-            .select("*")
-            .eq("cult_id", profileData.cult_id)
-            .order("created_at", { ascending: false });
-          setTaskLibrary(tasksLibrary || []);
-
-          // Cargar premios activos del fiel
           const { data: followerRewardsData } = await supabase
             .from("awarded_rewards")
             .select(`
@@ -496,6 +454,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         description: "No se pudo cargar la información del miembro",
         variant: "destructive",
       });
+      setIsLoading(false);
     }
   };
 
