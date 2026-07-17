@@ -48,25 +48,46 @@ export default function MisPremiosPage() {
     if (!user || !profile?.cult_id) return;
 
     try {
-      // Cargar mis premios
+      // Cargar mis premios usando la tabla correcta: awarded_rewards
       const { data: rewardsData, error: rewardsError } = await supabase
-        .from("follower_rewards")
-        .select("*")
+        .from("awarded_rewards")
+        .select(`
+          *,
+          rewards(name, description)
+        `)
         .eq("follower_id", user.id)
-        .order("is_used", { ascending: true })
-        .order("created_at", { ascending: false });
+        .order("is_redeemed", { ascending: true })
+        .order("awarded_at", { ascending: false });
 
-      if (rewardsError) throw rewardsError;
-      setMyRewards(rewardsData || []);
+      if (rewardsError) {
+        console.error("Error loading my rewards:", rewardsError);
+        throw rewardsError;
+      }
+
+      // Mapear a la estructura esperada
+      const mappedRewards = rewardsData?.map(r => ({
+        id: r.id,
+        reward_name: r.rewards?.name || "Premio",
+        reward_description: r.rewards?.description || null,
+        is_used: r.is_redeemed,
+        used_at: r.redeemed_at,
+      })) || [];
+
+      setMyRewards(mappedRewards);
 
       // Cargar templates de premios disponibles en la tienda
       const { data: templatesData, error: templatesError } = await supabase
         .from("rewards")
         .select("*")
         .eq("cult_id", profile.cult_id)
+        .eq("is_active", true)
         .order("faith_points_cost", { ascending: true });
 
-      if (templatesError) throw templatesError;
+      if (templatesError) {
+        console.error("Error loading shop rewards:", templatesError);
+        throw templatesError;
+      }
+
       setAvailableRewards(templatesData || []);
 
       // Cargar puntos de fe
@@ -78,56 +99,6 @@ export default function MisPremiosPage() {
 
       if (pointsError) throw pointsError;
       setMyFaithPoints(pointsData?.faith_points || 0);
-    } catch (error) {
-      console.error("Error loading rewards:", error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los premios",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadRewards = async () => {
-    if (!user || !profile?.cult_id) {
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      // Cargar premios disponibles para comprar (tienda)
-      const { data: shopData, error: shopError } = await supabase
-        .from("rewards")
-        .select("*")
-        .eq("cult_id", profile.cult_id)
-        .eq("is_active", true)
-        .order("cost", { ascending: true });
-
-      if (shopError) {
-        console.error("Error loading shop rewards:", shopError);
-        throw shopError;
-      }
-
-      setAvailableRewards(shopData || []);
-
-      // Cargar premios del fiel (otorgados y comprados)
-      const { data: myData, error: myError } = await supabase
-        .from("follower_rewards")
-        .select(`
-          *,
-          rewards(*)
-        `)
-        .eq("follower_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (myError) {
-        console.error("Error loading my rewards:", myError);
-        throw myError;
-      }
-
-      setMyRewards(myData || []);
     } catch (error: any) {
       console.error("Error loading rewards:", error);
       toast({
@@ -135,9 +106,9 @@ export default function MisPremiosPage() {
         description: `No se pudieron cargar los premios: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const loadAllRewards = async () => {
@@ -174,27 +145,36 @@ export default function MisPremiosPage() {
       const reward = availableRewards.find((r) => r.id === rewardId);
       if (!reward) return;
 
-      // Crear premio en follower_rewards
-      const { error: insertError } = await supabase.from("follower_rewards").insert({
+      // Crear premio en awarded_rewards
+      const { error: insertError } = await supabase.from("awarded_rewards").insert({
         follower_id: user.id,
-        cult_id: profile.cult_id,
         reward_id: reward.id,
-        reward_name: reward.name,
-        reward_description: reward.description,
-        is_used: false,
-        given_by: null,
-        is_custom: false,
+        awarded_by: user.id, // Auto-comprado
+        is_redeemed: false,
+        notes: "Comprado en tienda",
       });
 
       if (insertError) throw insertError;
 
-      // Restar puntos de fe
+      // Restar puntos de fe y registrar transacción
+      const newBalance = myFaithPoints - cost;
+      
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ faith_points: myFaithPoints - cost })
+        .update({ faith_points: newBalance })
         .eq("id", user.id);
 
       if (updateError) throw updateError;
+
+      // Registrar en el log
+      await supabase.from("faith_points_log").insert({
+        user_id: user.id,
+        deity_id: null,
+        amount: -cost,
+        balance_after: newBalance,
+        reason: `Compra: ${reward.name}`,
+        transaction_type: "purchase",
+      });
 
       toast({
         title: "Premio comprado",
@@ -202,11 +182,11 @@ export default function MisPremiosPage() {
       });
 
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error buying reward:", error);
       toast({
         title: "Error",
-        description: "No se pudo comprar el premio",
+        description: `No se pudo comprar el premio: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -215,10 +195,10 @@ export default function MisPremiosPage() {
   const handleUseReward = async (rewardId: string) => {
     try {
       const { error } = await supabase
-        .from("follower_rewards")
+        .from("awarded_rewards")
         .update({
-          is_used: true,
-          used_at: new Date().toISOString(),
+          is_redeemed: true,
+          redeemed_at: new Date().toISOString(),
         })
         .eq("id", rewardId);
 
@@ -226,11 +206,11 @@ export default function MisPremiosPage() {
 
       toast({ title: "Premio utilizado" });
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error using reward:", error);
       toast({
         title: "Error",
-        description: "No se pudo marcar como utilizado",
+        description: `No se pudo marcar como utilizado: ${error.message}`,
         variant: "destructive",
       });
     }
