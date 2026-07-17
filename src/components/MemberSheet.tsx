@@ -427,14 +427,14 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       // Cargar fetiches del culto y los marcados por el usuario
       const { data: fetchesData } = await supabase
-        .from("cult_fetishes")
+        .from("fetishes")
         .select("*")
         .eq("cult_id", profileData.cult_id)
         .order("name");
       setPractices(fetchesData || []);
 
       const { data: userFetchesData } = await supabase
-        .from("user_fetishes")
+        .from("fetish_ratings")
         .select("*")
         .eq("user_id", memberId);
       setUserPractices(userFetchesData || []);
