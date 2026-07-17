@@ -96,7 +96,7 @@ export default function PuntosFePage() {
       .from("faith_points_log")
       .select(`
         *,
-        deity_profile:deity_id(display_name)
+        profiles!faith_points_log_deity_id_fkey(display_name, avatar_url)
       `)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })

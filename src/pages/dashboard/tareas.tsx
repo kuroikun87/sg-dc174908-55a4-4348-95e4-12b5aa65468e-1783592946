@@ -207,6 +207,13 @@ export default function TareasPage() {
     if (!user || !profile?.cult_id) return;
 
     try {
+      // Obtener la tarea asignada para saber quién la asignó
+      const { data: taskData } = await supabase
+        .from("assigned_tasks")
+        .select("assigned_by")
+        .eq("id", assignedTaskId)
+        .single();
+
       // Marcar como completada
       const { error: updateError } = await supabase
         .from("assigned_tasks")
@@ -220,20 +227,25 @@ export default function TareasPage() {
 
       // Añadir puntos de fe
       if (faithPoints > 0) {
+        const newBalance = (profile.faith_points || 0) + faithPoints;
+        
         const { error: pointsError } = await supabase
           .from("profiles")
           .update({
-            faith_points: (profile.faith_points || 0) + faithPoints,
+            faith_points: newBalance,
           })
           .eq("id", user.id);
 
         if (pointsError) throw pointsError;
 
-        // Registrar en el log
+        // Registrar en el log con todos los campos requeridos
         await supabase.from("faith_points_log").insert({
           user_id: user.id,
+          deity_id: taskData?.assigned_by || null,
           amount: faithPoints,
+          balance_after: newBalance,
           reason: "Tarea completada",
+          transaction_type: "grant",
         });
       }
 
