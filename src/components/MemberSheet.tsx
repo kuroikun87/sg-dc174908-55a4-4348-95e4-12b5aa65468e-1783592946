@@ -114,6 +114,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [events, setEvents] = useState<any[]>([]);
   const [fetishes, setFetishes] = useState<any[]>([]);
   const [faithLog, setFaithLog] = useState<any[]>([]);
+  const [practices, setPractices] = useState<any[]>([]);
+  const [userPractices, setUserPractices] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
 
   const [assignMode, setAssignMode] = useState<"library" | "custom">("library");
   const [rewardAssignMode, setRewardAssignMode] = useState<"library" | "custom">("library");
@@ -387,6 +390,22 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .eq("user_id", memberId)
           .order("created_at", { ascending: false });
         setNotes(notesData || []);
+
+        // Cargar prácticas del culto y las del usuario
+        if (isDeity) {
+          const { data: practicesData } = await supabase
+            .from("practices")
+            .select("*")
+            .eq("cult_id", profileData.cult_id)
+            .order("name");
+          setPractices(practicesData || []);
+
+          const { data: userPracticesData } = await supabase
+            .from("user_practices")
+            .select("*")
+            .eq("user_id", memberId);
+          setUserPractices(userPracticesData || []);
+        }
 
         // Cargar premios activos del fiel
         const { data: rewardsData } = await supabase
@@ -1734,40 +1753,78 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
               </div>
             )}
 
-            <Tabs defaultValue="info" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="info">Información</TabsTrigger>
-                <TabsTrigger value="tasks">Tareas</TabsTrigger>
-                {isDeity && <TabsTrigger value="practices">Prácticas</TabsTrigger>}
-              </TabsList>
-
-              <div className="flex gap-2">
+            {/* Navegación de tabs */}
+            <div className="flex gap-2 border-b border-border/30 mt-6">
+              <button
+                onClick={() => setActiveTab("info")}
+                className={`px-4 py-2 text-sm font-heading transition-colors ${
+                  activeTab === "info"
+                    ? "text-silver border-b-2 border-silver"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Información
+              </button>
+              <button
+                onClick={() => setActiveTab("tasks")}
+                className={`px-4 py-2 text-sm font-heading transition-colors ${
+                  activeTab === "tasks"
+                    ? "text-silver border-b-2 border-silver"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Tareas
+              </button>
+              {isDeity && (
                 <button
-                  onClick={() => setActiveTab("notes")}
+                  onClick={() => setActiveTab("practices")}
                   className={`px-4 py-2 text-sm font-heading transition-colors ${
-                    activeTab === "notes"
+                    activeTab === "practices"
                       ? "text-silver border-b-2 border-silver"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Notas
+                  Prácticas
                 </button>
-                {isDeity && (
-                  <button
-                    onClick={() => setActiveTab("rewards-punishments")}
-                    className={`px-4 py-2 text-sm font-heading transition-colors ${
-                      activeTab === "rewards-punishments"
-                        ? "text-silver border-b-2 border-silver"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Premios y Consecuencias
-                  </button>
-                )}
-              </div>
+              )}
+              <button
+                onClick={() => setActiveTab("events")}
+                className={`px-4 py-2 text-sm font-heading transition-colors ${
+                  activeTab === "events"
+                    ? "text-silver border-b-2 border-silver"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Calendario
+              </button>
+              <button
+                onClick={() => setActiveTab("notes")}
+                className={`px-4 py-2 text-sm font-heading transition-colors ${
+                  activeTab === "notes"
+                    ? "text-silver border-b-2 border-silver"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Notas
+              </button>
+              {isDeity && (
+                <button
+                  onClick={() => setActiveTab("rewards-punishments")}
+                  className={`px-4 py-2 text-sm font-heading transition-colors ${
+                    activeTab === "rewards-punishments"
+                      ? "text-silver border-b-2 border-silver"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Premios y Consecuencias
+                </button>
+              )}
+            </div>
 
+            {/* Contenido de tabs */}
+            <div className="mt-6 space-y-4">
               {/* Tab: Información */}
-              <TabsContent value="info" className="space-y-4">
+              {activeTab === "info" && (
                 <ParchmentCard title="Información Personal" icon={<User className="w-4 h-4" />}>
                   <div className="space-y-3">
                     {member.bio && (
@@ -1792,741 +1849,488 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                     )}
                   </div>
                 </ParchmentCard>
-
-                {/* Calendario */}
-                {isDeity && (
-                  <ParchmentCard title="Calendario" icon={<Calendar className="w-4 h-4" />}>
-                    <div className="space-y-4">
-                      {/* Navegación de mes */}
-                      <div className="flex items-center justify-between">
-                        <button
-                          onClick={previousMonth}
-                          className="p-2 hover:bg-muted/30 rounded-sm transition-colors"
-                        >
-                          <svg
-                            className="w-5 h-5 text-foreground"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
-                        <h3 className="font-heading text-lg text-foreground">
-                          {currentMonth.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
-                        </h3>
-                        <button
-                          onClick={nextMonth}
-                          className="p-2 hover:bg-muted/30 rounded-sm transition-colors"
-                        >
-                          <svg
-                            className="w-5 h-5 text-foreground"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
-
-                      {/* Días de la semana */}
-                      <div className="grid grid-cols-7 gap-1">
-                        {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((day) => (
-                          <div
-                            key={day}
-                            className="text-center font-heading text-xs text-muted-foreground uppercase py-2"
-                          >
-                            {day}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Grid de días del mes */}
-                      <div className="grid grid-cols-7 gap-1">
-                        {getDaysInMonth(currentMonth).map((day, index) => {
-                          const dayEvents = getEventsForDay(day);
-                          const isSelected = isSameDay(day, selectedDate);
-                          const isToday = day && isSameDay(day, new Date());
-
-                          return (
-                            <button
-                              key={index}
-                              onClick={() => {
-                                if (day) {
-                                  setSelectedDate(day);
-                                  const year = day.getFullYear();
-                                  const month = String(day.getMonth() + 1).padStart(2, "0");
-                                  const dayNum = String(day.getDate()).padStart(2, "0");
-                                  const dateStr = `${year}-${month}-${dayNum}`;
-                                  
-                                  setEventForm({ ...eventForm, date: dateStr });
-                                  setShowEventForm(true);
-                                  setEditingEvent(null);
-                                }
-                              }}
-                              disabled={!day}
-                              className={`
-                                aspect-square p-1 rounded-sm border transition-all relative
-                                ${!day ? "invisible" : ""}
-                                ${isSelected ? "border-silver bg-silver/10" : "border-border/30 hover:border-silver/40"}
-                                ${isToday && !isSelected ? "border-silver/60" : ""}
-                                ${dayEvents.length > 0 ? "bg-muted/20" : "bg-background/50"}
-                              `}
-                            >
-                              {day && (
-                                <>
-                                  <span className={`font-heading text-xs ${isToday ? "text-gold font-bold" : "text-foreground"}`}>
-                                    {day.getDate()}
-                                  </span>
-                                  {dayEvents.length > 0 && (
-                                    <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-0.5">
-                                      {dayEvents.slice(0, 3).map((event) => {
-                                        const isDeityEvent = event.created_by !== memberId;
-                                        return (
-                                          <div
-                                            key={event.id}
-                                            className={`w-1.5 h-1.5 rounded-full ${isDeityEvent ? "bg-gold" : "bg-wine"}`}
-                                          />
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Eventos del día seleccionado */}
-                      {selectedDate && (
-                        <div className="space-y-2 pt-2 border-t border-border/30">
-                          <h4 className="font-heading text-sm text-gold">
-                            {selectedDate.toLocaleDateString("es-ES", { 
-                              weekday: "long", 
-                              day: "numeric", 
-                              month: "long" 
-                            })}
-                          </h4>
-
-                          {/* Formulario para crear evento */}
-                          {showEventForm && (
-                            <div className="p-3 bg-background/50 rounded-sm border border-gold/30 space-y-3">
-                              <Input
-                                placeholder="Título del evento"
-                                value={eventForm.title}
-                                onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                              />
-                              <Input
-                                type="time"
-                                placeholder="Hora (opcional)"
-                                value={eventForm.time}
-                                onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
-                              />
-                              <div className="flex gap-2">
-                                <RitualButton
-                                  variant="gold"
-                                  onClick={saveEvent}
-                                  disabled={!eventForm.title.trim()}
-                                  className="flex-1"
-                                >
-                                  {editingEvent ? "Actualizar" : "Crear Evento"}
-                                </RitualButton>
-                                <RitualButton
-                                  variant="outline"
-                                  onClick={() => {
-                                    setShowEventForm(false);
-                                    setEditingEvent(null);
-                                    setEventForm({ title: "", date: "", time: "" });
-                                  }}
-                                >
-                                  Cancelar
-                                </RitualButton>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Lista de eventos del día */}
-                          <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                            {getEventsForDay(selectedDate).length === 0 ? (
-                              <p className="text-xs text-muted-foreground text-center py-2">
-                                No hay eventos este día
-                              </p>
-                            ) : (
-                              getEventsForDay(selectedDate).map((event) => {
-                                const isDeityEvent = event.created_by !== memberId;
-                                return (
-                                  <div
-                                    key={event.id}
-                                    className={`
-                                      p-2 bg-background/50 rounded-sm space-y-1
-                                      ${isDeityEvent ? "border-2 border-gold/60" : "border border-border/30"}
-                                    `}
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                          <h5 className="font-heading text-xs text-foreground">
-                                            {event.title}
-                                          </h5>
-                                          {isDeityEvent && (
-                                            <Badge variant="outline" className="text-[10px] px-1 py-0 bg-gold/10 text-gold border-gold/30">
-                                              Deidad
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        {event.event_time && (
-                                          <p className="text-[10px] text-muted-foreground">
-                                            {event.event_time}
-                                          </p>
-                                        )}
-                                      </div>
-                                      {isDeityEvent && (
-                                        <div className="flex gap-0.5">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setEditingEvent(event);
-                                              setEventForm({
-                                                title: event.title,
-                                                date: event.event_date,
-                                                time: event.event_time || "",
-                                              });
-                                              setShowEventForm(true);
-                                            }}
-                                            className="p-1 text-gold hover:text-gold/80 transition-colors"
-                                          >
-                                            <Edit className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              deleteEvent(event.id);
-                                            }}
-                                            className="p-1 text-muted-foreground/30 hover:text-wine transition-colors"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </ParchmentCard>
-                )}
-
-                <ParchmentCard title="Historial de Fe" icon={<Sparkles className="w-4 h-4" />}>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {faithLog.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Sin movimientos</p>
-                    ) : (
-                      faithLog.map((log) => (
-                        <div key={log.id} className="flex items-start justify-between p-2 bg-background/50 rounded-sm border border-border/20">
-                          <div className="flex-1">
-                            <p className="font-heading text-xs text-foreground">{log.reason || "—"}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(log.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className={`font-mono text-xs ${log.amount > 0 ? "text-gold" : "text-wine"}`}>
-                              {log.amount > 0 ? "+" : ""}{log.amount}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ParchmentCard>
-              </TabsContent>
+              )}
 
               {/* Tab: Tareas */}
-              <TabsContent value="tasks" className="space-y-4">
-                {/* Botón para crear nueva tarea */}
-                {isDeity && !showTaskForm && (
-                  <div className="flex justify-center">
-                    <RitualButton variant="gold" onClick={() => setShowTaskForm(true)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Nueva Tarea
-                    </RitualButton>
-                  </div>
-                )}
-
-                {/* Formulario de asignación de tarea */}
-                {showTaskForm && (
-                  <ParchmentCard title="Nueva Tarea" icon={<Plus className="w-4 h-4" />}>
-                    <div className="space-y-4">
-                      {/* Selector de modo */}
-                      <div className="space-y-2">
-                        <label className="text-sm text-muted-foreground">Origen de la tarea</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => setTaskMode("library")}
-                            className={`p-3 rounded-sm border text-sm transition-all ${
-                              taskMode === "library"
-                                ? "border-silver bg-silver/10 text-silver"
-                                : "border-border/30 hover:border-silver/40"
-                            }`}
-                          >
-                            Biblioteca
-                          </button>
-                          <button
-                            onClick={() => setTaskMode("custom")}
-                            className={`p-3 rounded-sm border text-sm transition-all ${
-                              taskMode === "custom"
-                                ? "border-silver bg-silver/10 text-silver"
-                                : "border-border/30 hover:border-silver/40"
-                            }`}
-                          >
-                            Personalizada
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Selector de tarea de biblioteca */}
-                      {taskMode === "library" && (
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Seleccionar tarea *</label>
-                          <select
-                            value={taskForm.task_id}
-                            onChange={(e) => {
-                              const selectedTask = taskLibrary.find(t => t.id === e.target.value);
-                              setTaskForm({
-                                ...taskForm,
-                                task_id: e.target.value,
-                                requires_evidence: selectedTask?.requires_evidence || false,
-                              });
-                            }}
-                            className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
-                          >
-                            <option value="">Seleccione una tarea...</option>
-                            {taskLibrary.map((task) => (
-                              <option key={task.id} value={task.id}>
-                                {task.title}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {/* Campos de tarea personalizada */}
-                      {taskMode === "custom" && (
-                        <>
-                          <div className="space-y-2">
-                            <label className="text-sm text-muted-foreground">Título *</label>
-                            <Input
-                              value={taskForm.title}
-                              onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                              placeholder="Título de la tarea"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm text-muted-foreground">Descripción</label>
-                            <Textarea
-                              value={taskForm.description}
-                              onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-                              placeholder="Descripción detallada..."
-                              rows={3}
-                            />
-                          </div>
-
-                          <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-sm">
-                            <Checkbox
-                              checked={taskForm.requires_evidence}
-                              onCheckedChange={(checked) =>
-                                setTaskForm({ ...taskForm, requires_evidence: checked as boolean })
-                              }
-                            />
-                            <label className="text-sm text-foreground">Requiere evidencia fotográfica</label>
-                          </div>
-                        </>
-                      )}
-
-                      <Separator className="my-4" />
-
-                      <div className="space-y-2">
-                        <label className="text-sm text-muted-foreground">Frecuencia *</label>
-                        <div className="grid grid-cols-4 gap-2">
-                          <button
-                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "once" })}
-                            className={`p-3 rounded-sm border text-sm transition-all ${
-                              taskForm.recurrence_type === "once"
-                                ? "border-silver bg-silver/10 text-silver"
-                                : "border-border/30 hover:border-silver/40"
-                            }`}
-                          >
-                            Única
-                          </button>
-                          <button
-                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "daily" })}
-                            className={`p-3 rounded-sm border text-sm transition-all ${
-                              taskForm.recurrence_type === "daily"
-                                ? "border-silver bg-silver/10 text-silver"
-                                : "border-border/30 hover:border-silver/40"
-                            }`}
-                          >
-                            Diaria
-                          </button>
-                          <button
-                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "weekly" })}
-                            className={`p-3 rounded-sm border text-sm transition-all ${
-                              taskForm.recurrence_type === "weekly"
-                                ? "border-silver bg-silver/10 text-silver"
-                                : "border-border/30 hover:border-silver/40"
-                            }`}
-                          >
-                            Semanal
-                          </button>
-                          <button
-                            onClick={() => setTaskForm({ ...taskForm, recurrence_type: "monthly" })}
-                            className={`p-3 rounded-sm border text-sm transition-all ${
-                              taskForm.recurrence_type === "monthly"
-                                ? "border-silver bg-silver/10 text-silver"
-                                : "border-border/30 hover:border-silver/40"
-                            }`}
-                          >
-                            Mensual
-                          </button>
-                        </div>
-                      </div>
-
-                      {taskForm.recurrence_type === "once" && (
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Fecha límite *</label>
-                          <Input
-                            type="datetime-local"
-                            value={taskForm.due_date}
-                            onChange={(e) => setTaskForm({ ...taskForm, due_date: e.target.value })}
-                          />
-                        </div>
-                      )}
-
-                      {(taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly" || taskForm.recurrence_type === "monthly") && (
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Horario límite *</label>
-                          <Input
-                            type="time"
-                            value={taskForm.time_limit}
-                            onChange={(e) => setTaskForm({ ...taskForm, time_limit: e.target.value })}
-                          />
-                        </div>
-                      )}
-
-                      {taskForm.recurrence_type === "weekly" && (
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Días de la semana *</label>
-                          <div className="grid grid-cols-7 gap-1">
-                            {weekDays.map((day) => (
-                              <button
-                                key={day.value}
-                                onClick={() => toggleWeekDay(day.value)}
-                                className={`p-2 rounded-sm border text-xs font-heading transition-all ${
-                                  taskForm.recurrence_days.includes(day.value)
-                                    ? "border-silver bg-silver/10 text-silver"
-                                    : "border-border/30 hover:border-silver/40"
-                                }`}
-                              >
-                                {day.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <Separator className="my-4" />
-
-                      <div className="space-y-3">
-                        <h4 className="font-heading text-sm text-silver">Premio al completar</h4>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Premio de la lista (opcional)</label>
-                          <select
-                            value={taskForm.reward_id}
-                            onChange={(e) => setTaskForm({ ...taskForm, reward_id: e.target.value })}
-                            className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
-                          >
-                            <option value="">Sin premio de lista</option>
-                            {rewards.map((reward) => (
-                              <option key={reward.id} value={reward.id}>
-                                {reward.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Puntos de Fe adicionales</label>
-                          <Input
-                            type="number"
-                            value={taskForm.reward_faith_points}
-                            onChange={(e) =>
-                              setTaskForm({ ...taskForm, reward_faith_points: parseInt(e.target.value) || 0 })
-                            }
-                            min={0}
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-
-                      <Separator className="my-4" />
-
-                      <div className="space-y-3">
-                        <h4 className="font-heading text-sm text-wine">Consecuencia si no completa</h4>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Consecuencia de la lista (opcional)</label>
-                          <select
-                            value={taskForm.punishment_id}
-                            onChange={(e) => setTaskForm({ ...taskForm, punishment_id: e.target.value })}
-                            className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
-                          >
-                            <option value="">Sin consecuencia de lista</option>
-                            {punishments.map((punishment) => (
-                              <option key={punishment.id} value={punishment.id}>
-                                {punishment.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">Puntos de Fe a quitar</label>
-                          <Input
-                            type="number"
-                            value={taskForm.punishment_faith_points}
-                            onChange={(e) =>
-                              setTaskForm({ ...taskForm, punishment_faith_points: parseInt(e.target.value) || 0 })
-                            }
-                            min={0}
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 pt-2">
-                        <RitualButton variant="gold" onClick={saveTask} className="flex-1">
-                          Asignar Tarea
-                        </RitualButton>
-                        <RitualButton
-                          variant="outline"
-                          onClick={() => {
-                            setShowTaskForm(false);
-                            setTaskForm({
-                              task_id: "",
-                              title: "",
-                              description: "",
-                              requires_evidence: false,
-                              recurrence_type: "once",
-                              recurrence_days: [],
-                              time_limit: "",
-                              due_date: "",
-                              reward_id: "",
-                              reward_faith_points: 0,
-                              punishment_id: "",
-                              punishment_faith_points: 0,
-                            });
-                            setTaskMode("library");
-                          }}
-                        >
-                          Cancelar
-                        </RitualButton>
-                      </div>
-                    </div>
-                  </ParchmentCard>
-                )}
-
-                {/* Lista de tareas asignadas */}
-                <ParchmentCard title="Tareas Asignadas" icon={<CheckSquare className="w-4 h-4" />}>
-                  {followerTasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No hay tareas asignadas
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {followerTasks.map((assignment) => (
-                        <div
-                          key={assignment.id}
-                          className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <h4 className="font-heading text-sm text-foreground">
-                                {assignment.tasks?.title || "Tarea"}
-                              </h4>
-                              {assignment.tasks?.description && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {assignment.tasks.description}
-                                </p>
-                              )}
-                            </div>
-                            <Badge
-                              variant="outline"
-                              className={`text-xs shrink-0 ${
-                                assignment.status === "completed"
-                                  ? "border-gold/40 bg-gold/10 text-gold"
-                                  : assignment.status === "failed"
-                                  ? "border-wine/40 bg-wine/10 text-wine"
-                                  : "border-border/40 bg-muted/10 text-muted-foreground"
-                              }`}
-                            >
-                              {assignment.status === "completed"
-                                ? "Completada"
-                                : assignment.status === "failed"
-                                ? "Fallida"
-                                : "Pendiente"}
-                            </Badge>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-muted-foreground">Tipo: </span>
-                              <span className="text-foreground">
-                                {assignment.tasks?.recurrence_type === "once"
-                                  ? "Única"
-                                  : assignment.tasks?.recurrence_type === "daily"
-                                  ? "Diaria"
-                                  : assignment.tasks?.recurrence_type === "weekly"
-                                  ? "Semanal"
-                                  : "Mensual"}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Límite: </span>
-                              <span className="text-foreground">
-                                {assignment.due_date
-                                  ? new Date(assignment.due_date).toLocaleString()
-                                  : assignment.tasks?.time_limit || "—"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {(assignment.rewards || assignment.reward_faith_points > 0) && (
-                            <div className="flex items-center gap-2 p-2 bg-gold/5 rounded-sm">
-                              <Sparkles className="w-3 h-3 text-gold shrink-0" />
-                              <span className="text-xs text-muted-foreground">Premio:</span>
-                              <span className="text-xs text-foreground">
-                                {assignment.rewards?.name}
-                                {assignment.rewards?.name && assignment.reward_faith_points > 0 && " + "}
-                                {assignment.reward_faith_points > 0 && `${assignment.reward_faith_points} Puntos de Fe`}
-                              </span>
-                            </div>
-                          )}
-
-                          {(assignment.punishments || assignment.punishment_faith_points > 0) && (
-                            <div className="flex items-center gap-2 p-2 bg-wine/5 rounded-sm">
-                              <AlertTriangle className="w-3 h-3 text-wine shrink-0" />
-                              <span className="text-xs text-muted-foreground">Consecuencia:</span>
-                              <span className="text-xs text-foreground">
-                                {assignment.punishments?.name}
-                                {assignment.punishments?.name && assignment.punishment_faith_points > 0 && " + "}
-                                {assignment.punishment_faith_points > 0 && `-${assignment.punishment_faith_points} Puntos de Fe`}
-                              </span>
-                            </div>
-                          )}
-
-                          {assignment.evidence_url && (
-                            <a
-                              href={assignment.evidence_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-gold hover:text-gold/80 transition-colors flex items-center gap-1"
-                            >
-                              <CheckCircle2 className="w-3 h-3" />
-                              Ver evidencia
-                            </a>
-                          )}
-                        </div>
-                      ))}
+              {activeTab === "tasks" && (
+                <>
+                  {/* Botón para crear nueva tarea */}
+                  {isDeity && !showTaskForm && (
+                    <div className="flex justify-center">
+                      <RitualButton variant="gold" onClick={() => setShowTaskForm(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nueva Tarea
+                      </RitualButton>
                     </div>
                   )}
-                </ParchmentCard>
-              </TabsContent>
 
-              {/* Tab: Notas */}
-              <TabsContent value="notes" className="space-y-4">
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Sección de notas próximamente
-                </p>
-              </TabsContent>
+                  {/* Formulario de asignación de tarea */}
+                  {showTaskForm && (
+                    <ParchmentCard title="Nueva Tarea" icon={<Plus className="w-4 h-4" />}>
+                      <div className="space-y-4">
+                        {/* Selector de modo */}
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Origen de la tarea</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => setTaskMode("library")}
+                              className={`p-3 rounded-sm border text-sm transition-all ${
+                                taskMode === "library"
+                                  ? "border-silver bg-silver/10 text-silver"
+                                  : "border-border/30 hover:border-silver/40"
+                              }`}
+                            >
+                              Biblioteca
+                            </button>
+                            <button
+                              onClick={() => setTaskMode("custom")}
+                              className={`p-3 rounded-sm border text-sm transition-all ${
+                                taskMode === "custom"
+                                  ? "border-silver bg-silver/10 text-silver"
+                                  : "border-border/30 hover:border-silver/40"
+                              }`}
+                            >
+                              Personalizada
+                            </button>
+                          </div>
+                        </div>
 
-              {/* Tab: Prácticas (solo para deidades) */}
-              {isDeity && (
-                <TabsContent value="practices" className="space-y-4">
-                  <ParchmentCard title="Prácticas y Fetiches" icon={<Heart className="w-4 h-4" />}>
-                    {fetishes.length === 0 ? (
+                        {/* Selector de tarea de biblioteca */}
+                        {taskMode === "library" && (
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Seleccionar tarea *</label>
+                            <select
+                              value={taskForm.task_id}
+                              onChange={(e) => {
+                                const selectedTask = taskLibrary.find(t => t.id === e.target.value);
+                                setTaskForm({
+                                  ...taskForm,
+                                  task_id: e.target.value,
+                                  requires_evidence: selectedTask?.requires_evidence || false,
+                                });
+                              }}
+                              className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
+                            >
+                              <option value="">Seleccione una tarea...</option>
+                              {taskLibrary.map((task) => (
+                                <option key={task.id} value={task.id}>
+                                  {task.title}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Campos de tarea personalizada */}
+                        {taskMode === "custom" && (
+                          <>
+                            <div className="space-y-2">
+                              <label className="text-sm text-muted-foreground">Título *</label>
+                              <Input
+                                value={taskForm.title}
+                                onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                                placeholder="Título de la tarea"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-sm text-muted-foreground">Descripción</label>
+                              <Textarea
+                                value={taskForm.description}
+                                onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                                placeholder="Descripción detallada..."
+                                rows={3}
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-sm">
+                              <Checkbox
+                                checked={taskForm.requires_evidence}
+                                onCheckedChange={(checked) =>
+                                  setTaskForm({ ...taskForm, requires_evidence: checked as boolean })
+                                }
+                              />
+                              <label className="text-sm text-foreground">Requiere evidencia fotográfica</label>
+                            </div>
+                          </>
+                        )}
+
+                        <Separator className="my-4" />
+
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Frecuencia *</label>
+                          <div className="grid grid-cols-4 gap-2">
+                            <button
+                              onClick={() => setTaskForm({ ...taskForm, recurrence_type: "once" })}
+                              className={`p-3 rounded-sm border text-sm transition-all ${
+                                taskForm.recurrence_type === "once"
+                                  ? "border-silver bg-silver/10 text-silver"
+                                  : "border-border/30 hover:border-silver/40"
+                              }`}
+                            >
+                              Única
+                            </button>
+                            <button
+                              onClick={() => setTaskForm({ ...taskForm, recurrence_type: "daily" })}
+                              className={`p-3 rounded-sm border text-sm transition-all ${
+                                taskForm.recurrence_type === "daily"
+                                  ? "border-silver bg-silver/10 text-silver"
+                                  : "border-border/30 hover:border-silver/40"
+                              }`}
+                            >
+                              Diaria
+                            </button>
+                            <button
+                              onClick={() => setTaskForm({ ...taskForm, recurrence_type: "weekly" })}
+                              className={`p-3 rounded-sm border text-sm transition-all ${
+                                taskForm.recurrence_type === "weekly"
+                                  ? "border-silver bg-silver/10 text-silver"
+                                  : "border-border/30 hover:border-silver/40"
+                              }`}
+                            >
+                              Semanal
+                            </button>
+                            <button
+                              onClick={() => setTaskForm({ ...taskForm, recurrence_type: "monthly" })}
+                              className={`p-3 rounded-sm border text-sm transition-all ${
+                                taskForm.recurrence_type === "monthly"
+                                  ? "border-silver bg-silver/10 text-silver"
+                                  : "border-border/30 hover:border-silver/40"
+                              }`}
+                            >
+                              Mensual
+                            </button>
+                          </div>
+                        </div>
+
+                        {taskForm.recurrence_type === "once" && (
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Fecha límite *</label>
+                            <Input
+                              type="datetime-local"
+                              value={taskForm.due_date}
+                              onChange={(e) => setTaskForm({ ...taskForm, due_date: e.target.value })}
+                            />
+                          </div>
+                        )}
+
+                        {(taskForm.recurrence_type === "daily" || taskForm.recurrence_type === "weekly" || taskForm.recurrence_type === "monthly") && (
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Horario límite *</label>
+                            <Input
+                              type="time"
+                              value={taskForm.time_limit}
+                              onChange={(e) => setTaskForm({ ...taskForm, time_limit: e.target.value })}
+                            />
+                          </div>
+                        )}
+
+                        {taskForm.recurrence_type === "weekly" && (
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Días de la semana *</label>
+                            <div className="grid grid-cols-7 gap-1">
+                              {weekDays.map((day) => (
+                                <button
+                                  key={day.value}
+                                  onClick={() => toggleWeekDay(day.value)}
+                                  className={`p-2 rounded-sm border text-xs font-heading transition-all ${
+                                    taskForm.recurrence_days.includes(day.value)
+                                      ? "border-silver bg-silver/10 text-silver"
+                                      : "border-border/30 hover:border-silver/40"
+                                  }`}
+                                >
+                                  {day.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <Separator className="my-4" />
+
+                        <div className="space-y-3">
+                          <h4 className="font-heading text-sm text-silver">Premio al completar</h4>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Premio de la lista (opcional)</label>
+                            <select
+                              value={taskForm.reward_id}
+                              onChange={(e) => setTaskForm({ ...taskForm, reward_id: e.target.value })}
+                              className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
+                            >
+                              <option value="">Sin premio de lista</option>
+                              {rewards.map((reward) => (
+                                <option key={reward.id} value={reward.id}>
+                                  {reward.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Puntos de Fe adicionales</label>
+                            <Input
+                              type="number"
+                              value={taskForm.reward_faith_points}
+                              onChange={(e) =>
+                                setTaskForm({ ...taskForm, reward_faith_points: parseInt(e.target.value) || 0 })
+                              }
+                              min={0}
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+
+                        <Separator className="my-4" />
+
+                        <div className="space-y-3">
+                          <h4 className="font-heading text-sm text-wine">Consecuencia si no completa</h4>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Consecuencia de la lista (opcional)</label>
+                            <select
+                              value={taskForm.punishment_id}
+                              onChange={(e) => setTaskForm({ ...taskForm, punishment_id: e.target.value })}
+                              className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
+                            >
+                              <option value="">Sin consecuencia de lista</option>
+                              {punishments.map((punishment) => (
+                                <option key={punishment.id} value={punishment.id}>
+                                  {punishment.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Puntos de Fe a quitar</label>
+                            <Input
+                              type="number"
+                              value={taskForm.punishment_faith_points}
+                              onChange={(e) =>
+                                setTaskForm({ ...taskForm, punishment_faith_points: parseInt(e.target.value) || 0 })
+                              }
+                              min={0}
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <RitualButton variant="gold" onClick={saveTask} className="flex-1">
+                            Asignar Tarea
+                          </RitualButton>
+                          <RitualButton
+                            variant="outline"
+                            onClick={() => {
+                              setShowTaskForm(false);
+                              setTaskForm({
+                                task_id: "",
+                                title: "",
+                                description: "",
+                                requires_evidence: false,
+                                recurrence_type: "once",
+                                recurrence_days: [],
+                                time_limit: "",
+                                due_date: "",
+                                reward_id: "",
+                                reward_faith_points: 0,
+                                punishment_id: "",
+                                punishment_faith_points: 0,
+                              });
+                              setTaskMode("library");
+                            }}
+                          >
+                            Cancelar
+                          </RitualButton>
+                        </div>
+                      </div>
+                    </ParchmentCard>
+                  )}
+
+                  {/* Lista de tareas asignadas */}
+                  <ParchmentCard title="Tareas Asignadas" icon={<CheckSquare className="w-4 h-4" />}>
+                    {followerTasks.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-8">
-                        Este fiel aún no ha marcado ninguna práctica
+                        No hay tareas asignadas
                       </p>
                     ) : (
                       <div className="space-y-3">
-                        {practices.map((practice) => {
-                          const userPractice = userPractices.find((up) => up.practice_id === practice.id);
-                          const interest = userPractice?.interest_level;
-                          const isStarred = userPractice?.is_starred || false;
-
-                          return (
-                            <div
-                              key={practice.id}
-                              className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="font-heading text-sm text-foreground">{practice.name}</h4>
-                                    {isStarred && (
-                                      <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
-                                    )}
-                                  </div>
-                                  {practice.description && (
-                                    <p className="text-xs text-muted-foreground mt-1">{practice.description}</p>
-                                  )}
-                                </div>
+                        {followerTasks.map((assignment) => (
+                          <div
+                            key={assignment.id}
+                            className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1">
+                                <h4 className="font-heading text-sm text-foreground">
+                                  {assignment.tasks?.title || "Tarea"}
+                                </h4>
+                                {assignment.tasks?.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {assignment.tasks.description}
+                                  </p>
+                                )}
                               </div>
-
-                              {interest && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground">Interés:</span>
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-xs ${
-                                      interest === "love"
-                                        ? "border-green-500/40 bg-green-500/10 text-green-400"
-                                        : interest === "like"
-                                        ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
-                                        : interest === "neutral"
-                                        ? "border-border/40 bg-muted/10 text-muted-foreground"
-                                        : interest === "soft_limit"
-                                        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
-                                        : "border-red/40 bg-red/10 text-red"
-                                    }`}
-                                  >
-                                    {interest === "love"
-                                      ? "Me encanta"
-                                      : interest === "like"
-                                      ? "Me gusta"
-                                      : interest === "neutral"
-                                      ? "Me da igual"
-                                      : interest === "soft_limit"
-                                      ? "Límite blando"
-                                      : "Límite duro"}
-                                  </Badge>
-                                </div>
-                              )}
+                              <Badge
+                                variant="outline"
+                                className={`text-xs shrink-0 ${
+                                  assignment.status === "completed"
+                                    ? "border-gold/40 bg-gold/10 text-gold"
+                                    : assignment.status === "failed"
+                                    ? "border-wine/40 bg-wine/10 text-wine"
+                                    : "border-border/40 bg-muted/10 text-muted-foreground"
+                                }`}
+                              >
+                                {assignment.status === "completed"
+                                  ? "Completada"
+                                  : assignment.status === "failed"
+                                  ? "Fallida"
+                                  : "Pendiente"}
+                              </Badge>
                             </div>
-                          );
-                        })}
+
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-muted-foreground">Tipo: </span>
+                                <span className="text-foreground">
+                                  {assignment.tasks?.recurrence_type === "once"
+                                    ? "Única"
+                                    : assignment.tasks?.recurrence_type === "daily"
+                                    ? "Diaria"
+                                    : assignment.tasks?.recurrence_type === "weekly"
+                                    ? "Semanal"
+                                    : "Mensual"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Límite: </span>
+                                <span className="text-foreground">
+                                  {assignment.due_date
+                                    ? new Date(assignment.due_date).toLocaleString()
+                                    : assignment.tasks?.time_limit || "—"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {(assignment.rewards || assignment.reward_faith_points > 0) && (
+                              <div className="flex items-center gap-2 p-2 bg-gold/5 rounded-sm">
+                                <Sparkles className="w-3 h-3 text-gold shrink-0" />
+                                <span className="text-xs text-muted-foreground">Premio:</span>
+                                <span className="text-xs text-foreground">
+                                  {assignment.rewards?.name}
+                                  {assignment.rewards?.name && assignment.reward_faith_points > 0 && " + "}
+                                  {assignment.reward_faith_points > 0 && `${assignment.reward_faith_points} Puntos de Fe`}
+                                </span>
+                              </div>
+                            )}
+
+                            {(assignment.punishments || assignment.punishment_faith_points > 0) && (
+                              <div className="flex items-center gap-2 p-2 bg-wine/5 rounded-sm">
+                                <AlertTriangle className="w-3 h-3 text-wine shrink-0" />
+                                <span className="text-xs text-muted-foreground">Consecuencia:</span>
+                                <span className="text-xs text-foreground">
+                                  {assignment.punishments?.name}
+                                  {assignment.punishments?.name && assignment.punishment_faith_points > 0 && " + "}
+                                  {assignment.punishment_faith_points > 0 && `-${assignment.punishment_faith_points} Puntos de Fe`}
+                                </span>
+                              </div>
+                            )}
+
+                            {assignment.evidence_url && (
+                              <a
+                                href={assignment.evidence_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-gold hover:text-gold/80 transition-colors flex items-center gap-1"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                Ver evidencia
+                              </a>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </ParchmentCard>
-                </TabsContent>
+                </>
+              )}
+
+              {/* Tab: Notas */}
+              {activeTab === "notes" && (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Sección de notas próximamente
+                </p>
+              )}
+
+              {/* Tab: Prácticas (solo para deidades) */}
+              {isDeity && activeTab === "practices" && (
+                <ParchmentCard title="Prácticas y Fetiches" icon={<Heart className="w-4 h-4" />}>
+                  {fetishes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      Este fiel aún no ha marcado ninguna práctica
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {practices.map((practice) => {
+                        const userPractice = userPractices.find((up) => up.practice_id === practice.id);
+                        const interest = userPractice?.interest_level;
+                        const isStarred = userPractice?.is_starred || false;
+
+                        return (
+                          <div
+                            key={practice.id}
+                            className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-heading text-sm text-foreground">{practice.name}</h4>
+                                  {isStarred && (
+                                    <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
+                                  )}
+                                </div>
+                                {practice.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{practice.description}</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {interest && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">Interés:</span>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${
+                                    interest === "love"
+                                      ? "border-green-500/40 bg-green-500/10 text-green-400"
+                                      : interest === "like"
+                                      ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                                      : interest === "neutral"
+                                      ? "border-border/40 bg-muted/10 text-muted-foreground"
+                                      : interest === "soft_limit"
+                                      ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
+                                      : "border-red/40 bg-red/10 text-red"
+                                  }`}
+                                >
+                                  {interest === "love"
+                                    ? "Me encanta"
+                                    : interest === "like"
+                                    ? "Me gusta"
+                                    : interest === "neutral"
+                                    ? "Me da igual"
+                                    : interest === "soft_limit"
+                                    ? "Límite blando"
+                                    : "Límite duro"}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ParchmentCard>
               )}
 
               {/* Tab: Premios y Consecuencias */}
