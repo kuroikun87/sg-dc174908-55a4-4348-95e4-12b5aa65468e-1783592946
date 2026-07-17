@@ -2257,81 +2257,385 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                 </>
               )}
 
+              {/* Tab: Prácticas */}
+              {activeTab === "practices" && isDeity && (
+                <div className="space-y-4">
+                  <ParchmentCard title="Prácticas y Fetiches" icon={<User className="w-4 h-4" />}>
+                    {practices.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No hay prácticas registradas en el culto
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {practices.map((practice) => {
+                          const userPractice = userPractices.find((up) => up.practice_id === practice.id);
+                          const interest = userPractice?.interest_level;
+                          const isStarred = userPractice?.is_starred || false;
+
+                          return (
+                            <div
+                              key={practice.id}
+                              className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-heading text-sm text-foreground">{practice.name}</h4>
+                                    {isStarred && (
+                                      <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
+                                    )}
+                                  </div>
+                                  {practice.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{practice.description}</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {interest && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">Interés:</span>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-xs ${
+                                      interest === "love"
+                                        ? "border-green-500/40 bg-green-500/10 text-green-400"
+                                        : interest === "like"
+                                        ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                                        : interest === "neutral"
+                                        ? "border-border/40 bg-muted/10 text-muted-foreground"
+                                        : interest === "soft_limit"
+                                        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
+                                        : "border-red/40 bg-red/10 text-red"
+                                    }`}
+                                  >
+                                    {interest === "love"
+                                      ? "Me encanta"
+                                      : interest === "like"
+                                      ? "Me gusta"
+                                      : interest === "neutral"
+                                      ? "Me da igual"
+                                      : interest === "soft_limit"
+                                      ? "Límite blando"
+                                      : "Límite duro"}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ParchmentCard>
+                </div>
+              )}
+
+              {/* Tab: Calendario */}
+              {activeTab === "events" && (
+                <div className="space-y-4">
+                  {/* Vista de calendario */}
+                  <ParchmentCard title="Almanaque" icon={<Calendar className="w-4 h-4" />}>
+                    <div className="space-y-4">
+                      {/* Navegación del mes */}
+                      <div className="flex items-center justify-between">
+                        <button onClick={previousMonth} className="p-2 hover:bg-muted/20 rounded-sm transition-colors">
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <h3 className="font-heading text-lg">
+                          {currentMonth.toLocaleDateString("es", { month: "long", year: "numeric" })}
+                        </h3>
+                        <button onClick={nextMonth} className="p-2 hover:bg-muted/20 rounded-sm transition-colors">
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Días de la semana */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {["D", "L", "M", "X", "J", "V", "S"].map((day) => (
+                          <div key={day} className="text-center text-xs font-heading text-muted-foreground py-2">
+                            {day}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Días del mes */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {getDaysInMonth(currentMonth).map((day, index) => {
+                          const dayEvents = getEventsForDay(day);
+                          const isSelected = isSameDay(day, selectedDate);
+                          const isToday = day && isSameDay(day, new Date());
+
+                          return (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                if (day) {
+                                  setSelectedDate(day);
+                                  const year = day.getFullYear();
+                                  const month = String(day.getMonth() + 1).padStart(2, "0");
+                                  const dayNum = String(day.getDate()).padStart(2, "0");
+                                  const dateStr = `${year}-${month}-${dayNum}`;
+                                  
+                                  setEventForm({ ...eventForm, date: dateStr });
+                                  setShowEventForm(true);
+                                  setEditingEvent(null);
+                                }
+                              }}
+                              disabled={!day}
+                              className={`
+                                aspect-square p-1 rounded-sm border transition-all relative
+                                ${!day ? "invisible" : ""}
+                                ${isSelected ? "border-silver bg-silver/10" : "border-border/30 hover:border-silver/40"}
+                                ${isToday && !isSelected ? "border-silver/60" : ""}
+                                ${dayEvents.length > 0 ? "bg-muted/20" : "bg-background/50"}
+                              `}
+                            >
+                              {day && (
+                                <>
+                                  <span className="text-xs">{day.getDate()}</span>
+                                  {dayEvents.length > 0 && (
+                                    <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                                      {dayEvents.slice(0, 3).map((event, i) => (
+                                        <div
+                                          key={i}
+                                          className="w-1 h-1 rounded-full"
+                                          style={{
+                                            backgroundColor:
+                                              event.type === "free"
+                                                ? "#22c55e"
+                                                : event.type === "busy"
+                                                ? "#ef4444"
+                                                : event.type === "event"
+                                                ? "#3b82f6"
+                                                : "#a855f7",
+                                          }}
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </ParchmentCard>
+
+                  {/* Eventos del día seleccionado */}
+                  {selectedDate && (
+                    <ParchmentCard
+                      title={`Eventos - ${selectedDate.toLocaleDateString("es", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}`}
+                      icon={<Calendar className="w-4 h-4" />}
+                    >
+                      <div className="space-y-3">
+                        {getEventsForDay(selectedDate).length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            No hay eventos en esta fecha
+                          </p>
+                        ) : (
+                          getEventsForDay(selectedDate).map((event) => (
+                            <div
+                              key={event.id}
+                              className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-2 h-2 rounded-full"
+                                      style={{
+                                        backgroundColor:
+                                          event.type === "free"
+                                            ? "#22c55e"
+                                            : event.type === "busy"
+                                            ? "#ef4444"
+                                            : event.type === "event"
+                                            ? "#3b82f6"
+                                            : "#a855f7",
+                                      }}
+                                    />
+                                    <h4 className="font-heading text-sm text-foreground">{event.title}</h4>
+                                  </div>
+                                  {event.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{event.description}</p>
+                                  )}
+                                  {event.event_time && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Hora: {event.event_time}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Creado por:{" "}
+                                    {event.created_by === memberId ? "Fiel" : "Deidad"}
+                                  </p>
+                                </div>
+                              </div>
+                              {isDeity && (
+                                <div className="flex gap-2">
+                                  <RitualButton
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingEvent(event);
+                                      setEventForm({
+                                        title: event.title,
+                                        description: event.description || "",
+                                        type: event.type,
+                                        date: event.event_date,
+                                        time: event.event_time || "",
+                                        notify_follower: event.notify_follower || false,
+                                        notify_deity: event.notify_deity || false,
+                                      });
+                                      setShowEventForm(true);
+                                    }}
+                                  >
+                                    <Edit className="w-3 h-3 mr-1" />
+                                    Editar
+                                  </RitualButton>
+                                  {event.created_by === user?.id && (
+                                    <RitualButton
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => deleteEvent(event.id)}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </RitualButton>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+
+                        {/* Botón para agregar evento */}
+                        {isDeity && !showEventForm && (
+                          <RitualButton
+                            variant="outline"
+                            onClick={() => {
+                              const year = selectedDate.getFullYear();
+                              const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+                              const dayNum = String(selectedDate.getDate()).padStart(2, "0");
+                              const dateStr = `${year}-${month}-${dayNum}`;
+                              
+                              setEventForm({ ...eventForm, date: dateStr });
+                              setShowEventForm(true);
+                              setEditingEvent(null);
+                            }}
+                            className="w-full"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Agregar Evento
+                          </RitualButton>
+                        )}
+
+                        {/* Formulario de evento */}
+                        {showEventForm && isDeity && (
+                          <div className="p-4 bg-background/50 border border-border/30 rounded-sm space-y-3">
+                            <h4 className="font-heading text-sm text-silver">
+                              {editingEvent ? "Editar Evento" : "Nuevo Evento"}
+                            </h4>
+
+                            <div className="space-y-2">
+                              <label className="text-xs text-muted-foreground">Título</label>
+                              <Input
+                                value={eventForm.title}
+                                onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                                placeholder="Título del evento"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs text-muted-foreground">Descripción</label>
+                              <Textarea
+                                value={eventForm.description}
+                                onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                                placeholder="Descripción (opcional)"
+                                rows={2}
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs text-muted-foreground">Tipo</label>
+                              <select
+                                value={eventForm.type}
+                                onChange={(e) => setEventForm({ ...eventForm, type: e.target.value as any })}
+                                className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
+                              >
+                                <option value="free">Tiempo libre</option>
+                                <option value="busy">Ocupado</option>
+                                <option value="event">Evento</option>
+                                <option value="other">Otro</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs text-muted-foreground">Hora (opcional)</label>
+                              <Input
+                                type="time"
+                                value={eventForm.time}
+                                onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs text-muted-foreground">Notificaciones</label>
+                              <div className="space-y-1">
+                                <label className="flex items-center gap-2 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={eventForm.notify_follower}
+                                    onChange={(e) =>
+                                      setEventForm({ ...eventForm, notify_follower: e.target.checked })
+                                    }
+                                    className="rounded"
+                                  />
+                                  Notificar al fiel
+                                </label>
+                                <label className="flex items-center gap-2 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={eventForm.notify_deity}
+                                    onChange={(e) =>
+                                      setEventForm({ ...eventForm, notify_deity: e.target.checked })
+                                    }
+                                    className="rounded"
+                                  />
+                                  Notificarme a mí
+                                </label>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <RitualButton variant="gold" onClick={saveEvent} className="flex-1">
+                                {editingEvent ? "Actualizar" : "Guardar"}
+                              </RitualButton>
+                              <RitualButton
+                                variant="outline"
+                                onClick={() => {
+                                  setShowEventForm(false);
+                                  setEditingEvent(null);
+                                }}
+                              >
+                                Cancelar
+                              </RitualButton>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </ParchmentCard>
+                  )}
+                </div>
+              )}
+
               {/* Tab: Notas */}
               {activeTab === "notes" && (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   Sección de notas próximamente
                 </p>
-              )}
-
-              {/* Tab: Prácticas (solo para deidades) */}
-              {isDeity && activeTab === "practices" && (
-                <ParchmentCard title="Prácticas y Fetiches" icon={<Heart className="w-4 h-4" />}>
-                  {fetishes.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      Este fiel aún no ha marcado ninguna práctica
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {practices.map((practice) => {
-                        const userPractice = userPractices.find((up) => up.practice_id === practice.id);
-                        const interest = userPractice?.interest_level;
-                        const isStarred = userPractice?.is_starred || false;
-
-                        return (
-                          <div
-                            key={practice.id}
-                            className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h4 className="font-heading text-sm text-foreground">{practice.name}</h4>
-                                  {isStarred && (
-                                    <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
-                                  )}
-                                </div>
-                                {practice.description && (
-                                  <p className="text-xs text-muted-foreground mt-1">{practice.description}</p>
-                                )}
-                              </div>
-                            </div>
-
-                            {interest && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">Interés:</span>
-                                <Badge
-                                  variant="outline"
-                                  className={`text-xs ${
-                                    interest === "love"
-                                      ? "border-green-500/40 bg-green-500/10 text-green-400"
-                                      : interest === "like"
-                                      ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
-                                      : interest === "neutral"
-                                      ? "border-border/40 bg-muted/10 text-muted-foreground"
-                                      : interest === "soft_limit"
-                                      ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
-                                      : "border-red/40 bg-red/10 text-red"
-                                  }`}
-                                >
-                                  {interest === "love"
-                                    ? "Me encanta"
-                                    : interest === "like"
-                                    ? "Me gusta"
-                                    : interest === "neutral"
-                                    ? "Me da igual"
-                                    : interest === "soft_limit"
-                                    ? "Límite blando"
-                                    : "Límite duro"}
-                                </Badge>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </ParchmentCard>
               )}
 
               {/* Tab: Premios y Consecuencias */}
