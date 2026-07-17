@@ -146,6 +146,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     title: "",
     date: "",
     time: "",
+    description: "",
+    type: "event" as "free" | "busy" | "event" | "other",
+    notify_follower: false,
+    notify_deity: false,
   });
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -678,7 +682,15 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       setShowEventForm(false);
       setEditingEvent(null);
-      setEventForm({ title: "", date: "", time: "" });
+      setEventForm({ 
+        title: "", 
+        date: "", 
+        time: "",
+        description: "",
+        type: "event",
+        notify_follower: false,
+        notify_deity: false,
+      });
       
       // Pequeño delay para asegurar que la base de datos haya propagado el cambio
       await new Promise(resolve => setTimeout(resolve, 100));
