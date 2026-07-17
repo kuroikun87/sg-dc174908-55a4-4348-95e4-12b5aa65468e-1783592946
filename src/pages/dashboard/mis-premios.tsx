@@ -90,6 +90,56 @@ export default function MisPremiosPage() {
     }
   };
 
+  const loadRewards = async () => {
+    if (!user || !profile?.cult_id) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Cargar premios disponibles para comprar (tienda)
+      const { data: shopData, error: shopError } = await supabase
+        .from("rewards")
+        .select("*")
+        .eq("cult_id", profile.cult_id)
+        .eq("is_active", true)
+        .order("cost", { ascending: true });
+
+      if (shopError) {
+        console.error("Error loading shop rewards:", shopError);
+        throw shopError;
+      }
+
+      setAvailableRewards(shopData || []);
+
+      // Cargar premios del fiel (otorgados y comprados)
+      const { data: myData, error: myError } = await supabase
+        .from("follower_rewards")
+        .select(`
+          *,
+          rewards(*)
+        `)
+        .eq("follower_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (myError) {
+        console.error("Error loading my rewards:", myError);
+        throw myError;
+      }
+
+      setMyRewards(myData || []);
+    } catch (error: any) {
+      console.error("Error loading rewards:", error);
+      toast({
+        title: "Error",
+        description: `No se pudieron cargar los premios: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+
+    setIsLoading(false);
+  };
+
   const loadAllRewards = async () => {
     if (!profile?.cult_id) return;
 

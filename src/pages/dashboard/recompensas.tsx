@@ -51,7 +51,7 @@ interface Consequence {
 }
 
 export default function RecompensasPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
 
@@ -119,6 +119,81 @@ export default function RecompensasPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadData = async () => {
+    if (!user || !profile?.cult_id) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      if (profile.role === "deity") {
+        // Cargar todas las recompensas del culto
+        const { data: rewardsData, error: rewardsError } = await supabase
+          .from("rewards")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .order("is_active", { ascending: false })
+          .order("name");
+
+        if (rewardsError) throw rewardsError;
+        setRewards(rewardsData || []);
+
+        const { data: punishmentsData, error: punishmentsError } = await supabase
+          .from("punishments")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .order("is_active", { ascending: false })
+          .order("name");
+
+        if (punishmentsError) throw punishmentsError;
+        setConsequences(punishmentsData || []);
+      } else {
+        // Cargar recompensas activas para la tienda
+        const { data: rewardsData, error: rewardsError } = await supabase
+          .from("rewards")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .eq("is_active", true)
+          .order("cost", { ascending: true });
+
+        if (rewardsError) throw rewardsError;
+        setRewards(rewardsData || []);
+
+        // Cargar premios del fiel
+        const { data: myRewardsData, error: myRewardsError } = await supabase
+          .from("follower_rewards")
+          .select(`
+            *,
+            rewards(*)
+          `)
+          .eq("follower_id", user.id);
+
+        if (myRewardsError) throw myRewardsError;
+        setRewards(myRewardsData || []);
+
+        // Cargar consecuencias activas
+        const { data: punishmentsData, error: punishmentsError } = await supabase
+          .from("punishments")
+          .select("*")
+          .eq("cult_id", profile.cult_id)
+          .eq("is_active", true)
+          .order("cost", { ascending: true });
+
+        if (punishmentsError) throw punishmentsError;
+        setConsequences(punishmentsData || []);
+      }
+    } catch (error: any) {
+      console.error("Error loading data:", error);
+      toast({
+        title: "Error",
+        description: `No se pudieron cargar los datos: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+
+    setIsLoading(false);
   };
 
   // Task CRUD

@@ -434,7 +434,15 @@ export type Database = {
           transaction_type?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "faith_points_log_deity_id_fkey"
+            columns: ["deity_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       favor_points: {
         Row: {

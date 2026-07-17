@@ -92,25 +92,42 @@ export default function PuntosFePage() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("faith_points_log")
-      .select(`
-        *,
-        profiles!faith_points_log_deity_id_fkey(display_name, avatar_url)
-      `)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
+    try {
+      // Cargar historial sin JOIN
+      const { data: logs, error: logsError } = await supabase
+        .from("faith_points_log")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
 
-    if (error) {
+      if (logsError) throw logsError;
+
+      // Obtener IDs únicos de deidades
+      const deityIds = [...new Set(logs?.map(log => log.deity_id).filter(Boolean))] as string[];
+
+      // Cargar información de deidades
+      const { data: deities } = await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url")
+        .in("id", deityIds);
+
+      // Mapear datos
+      const enrichedLogs = logs?.map(log => ({
+        ...log,
+        deity_profile: deities?.find(d => d.id === log.deity_id) || null,
+      })) || [];
+
+      setMyHistory(enrichedLogs as any);
+    } catch (error: any) {
+      console.error("Error loading history:", error);
       toast({
         title: "Error",
         description: `No se pudo cargar el historial: ${error.message}`,
         variant: "destructive",
       });
-    } else {
-      setMyHistory(data || []);
     }
+
     setIsLoading(false);
   };
 
