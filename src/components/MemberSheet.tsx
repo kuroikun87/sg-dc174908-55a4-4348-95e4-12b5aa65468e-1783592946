@@ -155,6 +155,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [unlockedTitles, setUnlockedTitles] = useState<string[]>([]);
   const [newTitleName, setNewTitleName] = useState("");
   const [showLockDialog, setShowLockDialog] = useState(false);
+  const [titleLockExpiry, setTitleLockExpiry] = useState<string | null>(null);
   const [lockDuration, setLockDuration] = useState<"permanent" | "temporary">("permanent");
   const [lockHours, setLockHours] = useState(24);
   const [lockDays, setLockDays] = useState(0);
@@ -358,22 +359,22 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         setUnlockedTitles(followerTitlesData?.map(ft => ft.title_id) || []);
 
         // Cargar premios activos
-        const { data: rewardsData } = await supabase
+        const { data: activeRewards } = await supabase
           .from("rewards")
           .select("*")
           .eq("cult_id", profileData.cult_id)
           .eq("is_active", true)
           .order("name");
-        setRewards(rewardsData || []);
+        setRewards(activeRewards || []);
 
         // Cargar consecuencias activas
-        const { data: punishmentsData } = await supabase
+        const { data: activePunishments } = await supabase
           .from("punishments")
           .select("*")
           .eq("cult_id", profileData.cult_id)
           .eq("is_active", true)
           .order("name");
-        setPunishments(punishmentsData || []);
+        setPunishments(activePunishments || []);
 
         // Cargar biblioteca de tareas
         const { data: tasksLibrary } = await supabase
@@ -408,7 +409,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         }
 
         // Cargar premios activos del fiel
-        const { data: rewardsData } = await supabase
+        const { data: followerRewardsData } = await supabase
           .from("awarded_rewards")
           .select(`
             *,
@@ -418,10 +419,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .eq("follower_id", memberId)
           .eq("is_redeemed", false)
           .order("awarded_at", { ascending: false });
-        setFollowerRewards(rewardsData || []);
+        setFollowerRewards(followerRewardsData || []);
 
         // Cargar consecuencias activas del fiel
-        const { data: punishmentsData } = await supabase
+        const { data: followerPunishmentsData } = await supabase
           .from("follower_punishments")
           .select(`
             *,
@@ -431,7 +432,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .eq("follower_id", memberId)
           .eq("is_completed", false)
           .order("assigned_at", { ascending: false });
-        setFollowerPunishments(punishmentsData || []);
+        setFollowerPunishments(followerPunishmentsData || []);
       }
 
     } catch (error) {
