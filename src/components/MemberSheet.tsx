@@ -396,8 +396,72 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .order("created_at", { ascending: false });
         setNotes(notesData || []);
 
-        // Cargar prácticas del culto y las del usuario
+        // Cargar prácticas del culto y las del usuario (disponible tanto para deidad como para el propio fiel)
+        const { data: practicesData } = await supabase
+          .from("practices")
+          .select("*")
+          .eq("cult_id", profileData.cult_id)
+          .order("name");
+        setPractices(practicesData || []);
+
+        const { data: userPracticesData } = await supabase
+          .from("user_practices")
+          .select("*")
+          .eq("user_id", memberId);
+        setUserPractices(userPracticesData || []);
+
+        // Solo para deidades: cargar premios, consecuencias, títulos, etc.
         if (isDeity) {
+          // Cargar títulos globales del culto
+          const { data: cultTitlesData } = await supabase
+            .from("cult_titles")
+            .select("*")
+            .eq("cult_id", profileData.cult_id)
+            .order("name");
+          setGlobalTitles(cultTitlesData || []);
+
+          // Cargar títulos desbloqueados por este fiel
+          const { data: followerTitlesData } = await supabase
+            .from("follower_titles")
+            .select("title_id")
+            .eq("follower_id", memberId);
+          setUnlockedTitles(followerTitlesData?.map(ft => ft.title_id) || []);
+  
+          // Cargar premios activos
+          const { data: activeRewards } = await supabase
+            .from("rewards")
+            .select("*")
+            .eq("cult_id", profileData.cult_id)
+            .eq("is_active", true)
+            .order("name");
+          setRewards(activeRewards || []);
+
+          // Cargar consecuencias activas
+          const { data: activePunishments } = await supabase
+            .from("punishments")
+            .select("*")
+            .eq("cult_id", profileData.cult_id)
+            .eq("is_active", true)
+            .order("name");
+          setPunishments(activePunishments || []);
+
+          // Cargar biblioteca de tareas
+          const { data: tasksLibrary } = await supabase
+            .from("tasks")
+            .select("*")
+            .eq("cult_id", profileData.cult_id)
+            .order("created_at", { ascending: false });
+          setTaskLibrary(tasksLibrary || []);
+
+          // Cargar notas del fiel
+          const { data: notesData } = await supabase
+            .from("notes")
+            .select("*")
+            .eq("user_id", memberId)
+            .order("created_at", { ascending: false });
+          setNotes(notesData || []);
+
+          // Cargar prácticas del culto y las del usuario (disponible tanto para deidad como para el propio fiel)
           const { data: practicesData } = await supabase
             .from("practices")
             .select("*")
@@ -410,6 +474,32 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             .select("*")
             .eq("user_id", memberId);
           setUserPractices(userPracticesData || []);
+
+          // Cargar premios activos del fiel
+          const { data: followerRewardsData } = await supabase
+            .from("awarded_rewards")
+            .select(`
+              *,
+              rewards(name, description),
+              profiles!awarded_rewards_awarded_by_fkey(display_name)
+            `)
+            .eq("follower_id", memberId)
+            .eq("is_redeemed", false)
+            .order("awarded_at", { ascending: false });
+          setFollowerRewards(followerRewardsData || []);
+
+          // Cargar consecuencias activas del fiel
+          const { data: followerPunishmentsData } = await supabase
+            .from("follower_punishments")
+            .select(`
+              *,
+              punishments(name, description),
+              profiles!follower_punishments_assigned_by_fkey(display_name)
+            `)
+            .eq("follower_id", memberId)
+            .eq("is_completed", false)
+            .order("assigned_at", { ascending: false });
+          setFollowerPunishments(followerPunishmentsData || []);
         }
 
         // Cargar premios activos del fiel
