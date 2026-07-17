@@ -125,37 +125,77 @@ export default function TareasPage() {
     setIsLoading(false);
   };
 
-  const uploadEvidence = async (assignedTaskId: string, file: File) => {
-    if (!user) return;
-    setUploading(assignedTaskId);
+  const uploadEvidence = async (assignmentId: string, file: File) => {
+    // Validar tipo de archivo
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/bmp"];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        title: "Formato no válido",
+        description: "Por favor sube una imagen (JPG, PNG, GIF, WebP o BMP)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar tamaño (máximo 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB en bytes
+    if (file.size > maxSize) {
+      toast({
+        title: "Archivo muy grande",
+        description: "El tamaño máximo permitido es 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploading(assignmentId);
 
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${user.id}/${assignedTaskId}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("task_evidence")
-        .upload(fileName, file, { upsert: true });
+      // Generar nombre único para el archivo
+      const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const fileName = `${user?.id}/${assignmentId}-${Date.now()}.${fileExt}`;
 
-      if (uploadError) throw uploadError;
+      // Subir archivo a Supabase Storage
+      const { error: uploadError, data } = await supabase.storage
+        .from("task-evidence")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
 
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw uploadError;
+      }
+
+      // Obtener URL pública del archivo
       const { data: urlData } = supabase.storage
-        .from("task_evidence")
+        .from("task-evidence")
         .getPublicUrl(fileName);
 
+      if (!urlData?.publicUrl) {
+        throw new Error("No se pudo obtener la URL del archivo");
+      }
+
+      // Actualizar la tarea con la URL de evidencia
       const { error: updateError } = await supabase
         .from("assigned_tasks")
         .update({ evidence_url: urlData.publicUrl })
-        .eq("id", assignedTaskId);
+        .eq("id", assignmentId);
 
       if (updateError) throw updateError;
 
-      toast({ title: "Evidencia subida" });
+      toast({
+        title: "Evidencia subida",
+        description: "La imagen se subió correctamente",
+      });
+
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading evidence:", error);
       toast({
-        title: "Error",
-        description: "No se pudo subir la evidencia",
+        title: "Error al subir evidencia",
+        description: error.message || "No se pudo subir el archivo. Intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
@@ -775,17 +815,24 @@ export default function TareasPage() {
                       <div className="space-y-2">
                         {assignment.tasks?.requires_evidence && !assignment.evidence_url && (
                           <div className="space-y-2">
-                            <label className="text-xs text-muted-foreground">Subir evidencia (requerida)</label>
+                            <label className="text-xs text-muted-foreground">
+                              Subir evidencia (requerida)
+                            </label>
                             <input
                               type="file"
-                              accept="image/*"
+                              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) uploadEvidence(assignment.id, file);
                               }}
                               disabled={!!uploading}
-                              className="w-full text-xs"
+                              className="w-full text-xs file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border-0 
+                                         file:text-xs file:bg-silver/10 file:text-silver hover:file:bg-silver/20 
+                                         file:cursor-pointer cursor-pointer"
                             />
+                            <p className="text-[10px] text-muted-foreground">
+                              Formatos: JPG, PNG, GIF, WebP, BMP • Máximo 10MB
+                            </p>
                           </div>
                         )}
                         <RitualButton
