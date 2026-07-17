@@ -228,9 +228,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
   const loadMemberData = async () => {
     if (!memberId) return;
+
     setIsLoading(true);
 
     try {
+      // Cargar perfil del fiel
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select(`
