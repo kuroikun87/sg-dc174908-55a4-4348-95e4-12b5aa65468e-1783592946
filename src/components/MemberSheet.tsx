@@ -425,19 +425,19 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         .order("created_at", { ascending: false });
       setNotes(notesData || []);
 
-      // Cargar prácticas del culto y las del usuario
-      const { data: practicesData } = await supabase
-        .from("practices")
+      // Cargar fetiches del culto y los marcados por el usuario
+      const { data: fetchesData } = await supabase
+        .from("cult_fetishes")
         .select("*")
         .eq("cult_id", profileData.cult_id)
         .order("name");
-      setPractices(practicesData || []);
+      setPractices(fetchesData || []);
 
-      const { data: userPracticesData } = await supabase
-        .from("user_practices")
+      const { data: userFetchesData } = await supabase
+        .from("user_fetishes")
         .select("*")
         .eq("user_id", memberId);
-      setUserPractices(userPracticesData || []);
+      setUserPractices(userFetchesData || []);
 
       setIsLoading(false);
     } catch (error) {
@@ -2280,7 +2280,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                     ) : (
                       <div className="space-y-3">
                         {practices.map((practice) => {
-                          const userPractice = userPractices.find((up) => up.practice_id === practice.id);
+                          const userPractice = userPractices.find((up) => up.fetish_id === practice.id);
                           const interest = userPractice?.interest_level;
                           const isStarred = userPractice?.is_starred || false;
 
