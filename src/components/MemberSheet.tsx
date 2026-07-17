@@ -453,28 +453,6 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             .order("created_at", { ascending: false });
           setTaskLibrary(tasksLibrary || []);
 
-          // Cargar notas del fiel
-          const { data: notesData } = await supabase
-            .from("notes")
-            .select("*")
-            .eq("user_id", memberId)
-            .order("created_at", { ascending: false });
-          setNotes(notesData || []);
-
-          // Cargar prácticas del culto y las del usuario (disponible tanto para deidad como para el propio fiel)
-          const { data: practicesData } = await supabase
-            .from("practices")
-            .select("*")
-            .eq("cult_id", profileData.cult_id)
-            .order("name");
-          setPractices(practicesData || []);
-
-          const { data: userPracticesData } = await supabase
-            .from("user_practices")
-            .select("*")
-            .eq("user_id", memberId);
-          setUserPractices(userPracticesData || []);
-
           // Cargar premios activos del fiel
           const { data: followerRewardsData } = await supabase
             .from("awarded_rewards")
@@ -501,32 +479,13 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
             .order("assigned_at", { ascending: false });
           setFollowerPunishments(followerPunishmentsData || []);
         }
-
-        // Cargar premios activos del fiel
-        const { data: followerRewardsData } = await supabase
-          .from("awarded_rewards")
-          .select(`
-            *,
-            rewards(name, description),
-            profiles!awarded_rewards_awarded_by_fkey(display_name)
-          `)
-          .eq("follower_id", memberId)
-          .eq("is_redeemed", false)
-          .order("awarded_at", { ascending: false });
-        setFollowerRewards(followerRewardsData || []);
-
-        // Cargar consecuencias activas del fiel
-        const { data: followerPunishmentsData } = await supabase
-          .from("follower_punishments")
-          .select(`
-            *,
-            punishments(name, description),
-            profiles!follower_punishments_assigned_by_fkey(display_name)
-          `)
-          .eq("follower_id", memberId)
-          .eq("is_completed", false)
-          .order("assigned_at", { ascending: false });
-        setFollowerPunishments(followerPunishmentsData || []);
+      } catch (error) {
+        console.error("Error loading member data:", error);
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la información del miembro",
+          variant: "destructive",
+        });
       }
 
     } catch (error) {
