@@ -37,6 +37,12 @@ import {
   Lock,
   Unlock,
   HeartCrack,
+  Check,
+  Save,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -179,6 +185,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [taskLibrary, setTaskLibrary] = useState<any[]>([]);
   const [rewards, setRewards] = useState<any[]>([]);
   const [punishments, setPunishments] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<
+    "info" | "tasks" | "practices" | "events" | "notes" | "rewards-punishments"
+  >("info");
 
   const isDeity = profile?.role === "deity";
 
@@ -370,6 +379,40 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .eq("cult_id", profileData.cult_id)
           .order("created_at", { ascending: false });
         setTaskLibrary(tasksLibrary || []);
+
+        // Cargar notas del fiel
+        const { data: notesData } = await supabase
+          .from("notes")
+          .select("*")
+          .eq("user_id", memberId)
+          .order("created_at", { ascending: false });
+        setNotes(notesData || []);
+
+        // Cargar premios activos del fiel
+        const { data: rewardsData } = await supabase
+          .from("awarded_rewards")
+          .select(`
+            *,
+            rewards(name, description),
+            profiles!awarded_rewards_awarded_by_fkey(display_name)
+          `)
+          .eq("follower_id", memberId)
+          .eq("is_redeemed", false)
+          .order("awarded_at", { ascending: false });
+        setFollowerRewards(rewardsData || []);
+
+        // Cargar consecuencias activas del fiel
+        const { data: punishmentsData } = await supabase
+          .from("follower_punishments")
+          .select(`
+            *,
+            punishments(name, description),
+            profiles!follower_punishments_assigned_by_fkey(display_name)
+          `)
+          .eq("follower_id", memberId)
+          .eq("is_completed", false)
+          .order("assigned_at", { ascending: false });
+        setFollowerPunishments(punishmentsData || []);
       }
 
     } catch (error) {
@@ -808,23 +851,19 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     if (!memberId || !user?.id) return;
 
     try {
-      let lockedUntil = null;
-      if (lockDuration === "temporary") {
-        const totalMinutes = lockDays * 24 * 60 + lockHours * 60 + lockMinutes;
-        lockedUntil = new Date(Date.now() + totalMinutes * 60 * 1000).toISOString();
-      }
-
       const { error } = await supabase
         .from("profiles")
         .update({
-          title_locked_until: lockedUntil,
+          title_locked_until: titleLockExpiry || null,
           title_locked_by: user.id,
         })
         .eq("id", memberId);
 
       if (error) throw error;
-      toast({ title: lockDuration === "permanent" ? "Título bloqueado permanentemente" : "Título bloqueado temporalmente" });
+
+      toast({ title: "Título bloqueado" });
       setShowLockDialog(false);
+      setTitleLockExpiry(null);
       loadMemberData();
     } catch (error) {
       console.error("Error locking title:", error);
@@ -849,6 +888,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         .eq("id", memberId);
 
       if (error) throw error;
+
       toast({ title: "Título desbloqueado" });
       loadMemberData();
     } catch (error) {
@@ -856,6 +896,127 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       toast({
         title: "Error",
         description: "No se pudo desbloquear el título",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Funciones de gestión de premios y consecuencias
+  const completeReward = async (rewardId: string, rewardName: string) => {
+    if (!memberId || !user?.id) return;
+
+    try {
+      // Marcar como canjeado
+      const { error: updateError } = await supabase
+        .from("awarded_rewards")
+        .update({
+          is_redeemed: true,
+          redeemed_at: new Date().toISOString(),
+        })
+        .eq("id", rewardId);
+
+      if (updateError) throw updateError;
+
+      // Registrar en historial
+      await supabase.from("faith_points_log").insert({
+        user_id: memberId,
+        deity_id: user.id,
+        amount: 0,
+        balance_after: member?.faith_points || 0,
+        reason: `Premio cumplido: ${rewardName}`,
+        transaction_type: "reward_redeemed",
+      });
+
+      toast({ title: "Premio marcado como cumplido" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error completing reward:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo marcar el premio como cumplido",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteReward = async (rewardId: string) => {
+    if (!memberId) return;
+
+    try {
+      const { error } = await supabase
+        .from("awarded_rewards")
+        .delete()
+        .eq("id", rewardId);
+
+      if (error) throw error;
+
+      toast({ title: "Premio eliminado" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error deleting reward:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el premio",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const completePunishment = async (punishmentId: string, punishmentName: string) => {
+    if (!memberId || !user?.id) return;
+
+    try {
+      // Marcar como completada
+      const { error: updateError } = await supabase
+        .from("follower_punishments")
+        .update({
+          is_completed: true,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", punishmentId);
+
+      if (updateError) throw updateError;
+
+      // Registrar en historial
+      await supabase.from("faith_points_log").insert({
+        user_id: memberId,
+        deity_id: user.id,
+        amount: 0,
+        balance_after: member?.faith_points || 0,
+        reason: `Consecuencia cumplida: ${punishmentName}`,
+        transaction_type: "punishment_completed",
+      });
+
+      toast({ title: "Consecuencia marcada como cumplida" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error completing punishment:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo marcar la consecuencia como cumplida",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deletePunishment = async (punishmentId: string) => {
+    if (!memberId) return;
+
+    try {
+      const { error } = await supabase
+        .from("follower_punishments")
+        .delete()
+        .eq("id", punishmentId);
+
+      if (error) throw error;
+
+      toast({ title: "Consecuencia eliminada" });
+      loadMemberData();
+    } catch (error) {
+      console.error("Error deleting punishment:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la consecuencia",
         variant: "destructive",
       });
     }
@@ -1580,6 +1741,31 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                 {isDeity && <TabsTrigger value="practices">Prácticas</TabsTrigger>}
               </TabsList>
 
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveTab("notes")}
+                  className={`px-4 py-2 text-sm font-heading transition-colors ${
+                    activeTab === "notes"
+                      ? "text-silver border-b-2 border-silver"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Notas
+                </button>
+                {isDeity && (
+                  <button
+                    onClick={() => setActiveTab("rewards-punishments")}
+                    className={`px-4 py-2 text-sm font-heading transition-colors ${
+                      activeTab === "rewards-punishments"
+                        ? "text-silver border-b-2 border-silver"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Premios y Consecuencias
+                  </button>
+                )}
+              </div>
+
               {/* Tab: Información */}
               <TabsContent value="info" className="space-y-4">
                 <ParchmentCard title="Información Personal" icon={<User className="w-4 h-4" />}>
@@ -2281,50 +2467,59 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                       </p>
                     ) : (
                       <div className="space-y-3">
-                        {fetishes.map((rating) => {
-                          const ratingLabels = {
-                            love: "Le encanta",
-                            like: "Le gusta",
-                            neutral: "Le da igual",
-                            soft_limit: "Límite blando",
-                            hard_limit: "Límite duro",
-                          };
-                          const ratingColors = {
-                            love: "text-gold border-gold/40 bg-gold/10",
-                            like: "text-green-400 border-green-400/40 bg-green-400/10",
-                            neutral: "text-muted-foreground border-border/40 bg-muted/10",
-                            soft_limit: "text-yellow-500 border-yellow-500/40 bg-yellow-500/10",
-                            hard_limit: "text-wine border-wine/40 bg-wine/10",
-                          };
+                        {practices.map((practice) => {
+                          const userPractice = userPractices.find((up) => up.practice_id === practice.id);
+                          const interest = userPractice?.interest_level;
+                          const isStarred = userPractice?.is_starred || false;
 
                           return (
                             <div
-                              key={rating.id}
-                              className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2"
+                              key={practice.id}
+                              className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
-                                    <h4 className="font-heading text-sm text-foreground">
-                                      {rating.fetishes?.name || "Práctica"}
-                                    </h4>
-                                    {rating.is_curious && (
-                                      <Star className="w-3.5 h-3.5 text-gold fill-gold" />
+                                    <h4 className="font-heading text-sm text-foreground">{practice.name}</h4>
+                                    {isStarred && (
+                                      <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
                                     )}
                                   </div>
-                                  {rating.fetishes?.description && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      {rating.fetishes.description}
-                                    </p>
+                                  {practice.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{practice.description}</p>
                                   )}
                                 </div>
-                                <Badge
-                                  variant="outline"
-                                  className={`text-xs shrink-0 ${ratingColors[rating.rating]}`}
-                                >
-                                  {ratingLabels[rating.rating]}
-                                </Badge>
                               </div>
+
+                              {interest && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">Interés:</span>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-xs ${
+                                      interest === "love"
+                                        ? "border-green-500/40 bg-green-500/10 text-green-400"
+                                        : interest === "like"
+                                        ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                                        : interest === "neutral"
+                                        ? "border-border/40 bg-muted/10 text-muted-foreground"
+                                        : interest === "soft_limit"
+                                        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
+                                        : "border-red/40 bg-red/10 text-red"
+                                    }`}
+                                  >
+                                    {interest === "love"
+                                      ? "Me encanta"
+                                      : interest === "like"
+                                      ? "Me gusta"
+                                      : interest === "neutral"
+                                      ? "Me da igual"
+                                      : interest === "soft_limit"
+                                      ? "Límite blando"
+                                      : "Límite duro"}
+                                  </Badge>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -2333,7 +2528,142 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                   </ParchmentCard>
                 </TabsContent>
               )}
-            </Tabs>
+
+              {/* Tab: Premios y Consecuencias */}
+              {activeTab === "rewards-punishments" && isDeity && (
+                <div className="space-y-6">
+                  {/* Premios activos */}
+                  <ParchmentCard title="Premios Pendientes" icon={<Gift className="w-4 h-4" />}>
+                    {followerRewards.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No tiene premios pendientes
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {followerRewards.map((reward) => (
+                          <div
+                            key={reward.id}
+                            className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-heading text-sm text-foreground">
+                                  {reward.rewards?.name || "Premio"}
+                                </h4>
+                                {reward.rewards?.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {reward.rewards.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="text-xs text-muted-foreground">
+                                    Otorgado por: {reward.profiles?.display_name || "Sistema"}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">•</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(reward.awarded_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                {reward.notes && (
+                                  <p className="text-xs text-muted-foreground italic mt-1">
+                                    Nota: {reward.notes}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <RitualButton
+                                variant="outline"
+                                size="sm"
+                                onClick={() => completeReward(reward.id, reward.rewards?.name || "Premio")}
+                                className="flex-1 border-blue-500/40 text-blue-400 hover:bg-blue-500/10"
+                              >
+                                <Check className="w-3 h-3 mr-1" />
+                                Marcar cumplido
+                              </RitualButton>
+                              <RitualButton
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deleteReward(reward.id)}
+                                className="border-red/40 text-red hover:bg-red/10"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </RitualButton>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ParchmentCard>
+
+                  {/* Consecuencias activas */}
+                  <ParchmentCard title="Consecuencias Pendientes" icon={<AlertTriangle className="w-4 h-4" />}>
+                    {followerPunishments.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No tiene consecuencias pendientes
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {followerPunishments.map((punishment) => (
+                          <div
+                            key={punishment.id}
+                            className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-heading text-sm text-foreground">
+                                  {punishment.punishments?.name || "Consecuencia"}
+                                </h4>
+                                {punishment.punishments?.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {punishment.punishments.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="text-xs text-muted-foreground">
+                                    Asignada por: {punishment.profiles?.display_name || "Sistema"}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">•</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(punishment.assigned_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                {punishment.notes && (
+                                  <p className="text-xs text-muted-foreground italic mt-1">
+                                    Nota: {punishment.notes}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <RitualButton
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  completePunishment(punishment.id, punishment.punishments?.name || "Consecuencia")
+                                }
+                                className="flex-1 border-red/40 text-red hover:bg-red/10"
+                              >
+                                <Check className="w-3 h-3 mr-1" />
+                                Marcar cumplida
+                              </RitualButton>
+                              <RitualButton
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deletePunishment(punishment.id)}
+                                className="border-red/40 text-red hover:bg-red/10"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </RitualButton>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ParchmentCard>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div className="text-center py-20">
