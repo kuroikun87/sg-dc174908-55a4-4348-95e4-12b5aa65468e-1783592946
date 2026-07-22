@@ -145,11 +145,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [eventForm, setEventForm] = useState({
     title: "",
     date: "",
-    time: "",
-    description: "",
-    type: "event" as "free" | "busy" | "event" | "other",
-    notify_follower: false,
-    notify_deity: false,
+    start_time: "",
+    end_time: "",
+    is_important: false,
   });
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -294,10 +292,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
 
       const { data: eventsData, error: eventsError } = await supabase
         .from("calendar_events")
-        .select("*")
+        .select("*, profiles!calendar_events_created_by_fkey(display_name, role)")
         .eq("user_id", memberId)
         .order("event_date", { ascending: true })
-        .order("event_time", { ascending: true, nullsFirst: false });
+        .order("start_time", { ascending: true, nullsFirst: false });
       
       console.log("Eventos cargados para memberId:", memberId, eventsData);
       if (eventsError) console.error("Error cargando eventos:", eventsError);
@@ -658,7 +656,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
           .update({
             title: eventForm.title,
             event_date: eventForm.date,
-            event_time: eventForm.time || null,
+            start_time: eventForm.start_time || null,
+            end_time: eventForm.end_time || null,
+            is_important: isDeity ? true : eventForm.is_important,
           })
           .eq("id", editingEvent.id);
 
@@ -669,9 +669,10 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         const { data, error } = await supabase.from("calendar_events").insert({
           user_id: memberId,
           title: eventForm.title,
-          event_type: "event",
           event_date: eventForm.date,
-          event_time: eventForm.time || null,
+          start_time: eventForm.start_time || null,
+          end_time: eventForm.end_time || null,
+          is_important: isDeity ? true : eventForm.is_important,
           created_by: user?.id,
         }).select();
 
@@ -685,11 +686,9 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       setEventForm({ 
         title: "", 
         date: "", 
-        time: "",
-        description: "",
-        type: "event",
-        notify_follower: false,
-        notify_deity: false,
+        start_time: "",
+        end_time: "",
+        is_important: false,
       });
       
       // Pequeño delay para asegurar que la base de datos haya propagado el cambio
@@ -772,12 +771,12 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     
     const dayEvents = events.filter((event) => event.event_date === dateStr);
     
-    // Ordenar por hora (event_time) - los que no tienen hora van al final
+    // Ordenar por hora de inicio - los que no tienen hora van al final
     dayEvents.sort((a, b) => {
-      if (!a.event_time && !b.event_time) return 0;
-      if (!a.event_time) return 1;
-      if (!b.event_time) return -1;
-      return a.event_time.localeCompare(b.event_time);
+      if (!a.start_time && !b.start_time) return 0;
+      if (!a.start_time) return 1;
+      if (!b.start_time) return -1;
+      return a.start_time.localeCompare(b.start_time);
     });
     
     return dayEvents;
@@ -2449,66 +2448,61 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                             No hay eventos en esta fecha
                           </p>
                         ) : (
-                          getEventsForDay(selectedDate).map((event) => (
-                            <div
-                              key={event.id}
-                              className="p-3 bg-muted/20 rounded-sm border border-border/30 space-y-2"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <div
-                                      className="w-2 h-2 rounded-full"
-                                      style={{
-                                        backgroundColor:
-                                          event.type === "free"
-                                            ? "#22c55e"
-                                            : event.type === "busy"
-                                            ? "#ef4444"
-                                            : event.type === "event"
-                                            ? "#3b82f6"
-                                            : "#a855f7",
-                                      }}
-                                    />
-                                    <h4 className="font-heading text-sm text-foreground">{event.title}</h4>
+                          getEventsForDay(selectedDate).map((event) => {
+                            const isImportant = event.is_important;
+                            const creatorName = event.profiles?.display_name || (event.profiles?.role === 'deity' ? 'Deidad' : 'Fiel');
+                            const canEdit = event.created_by === user?.id;
+                            
+                            return (
+                              <div
+                                key={event.id}
+                                className={`p-3 rounded-sm border space-y-2 ${
+                                  isImportant 
+                                    ? 'bg-gold/10 border-gold/40 shadow-[0_0_15px_rgba(212,175,55,0.3)]' 
+                                    : 'bg-muted/20 border-border/30'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h4 className="font-heading text-sm text-foreground flex items-center gap-2">
+                                      {isImportant && <Star className="w-3.5 h-3.5 text-gold fill-gold" />}
+                                      <span className="text-muted-foreground">{creatorName}:</span>
+                                      <span>{event.title}</span>
+                                    </h4>
+                                    {(event.start_time || event.end_time) && (
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                                        <Clock className="w-3 h-3" />
+                                        {event.start_time && <span>{event.start_time.slice(0, 5)}</span>}
+                                        {event.end_time && (
+                                          <>
+                                            <span>-</span>
+                                            <span>{event.end_time.slice(0, 5)}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                  {event.description && (
-                                    <p className="text-xs text-muted-foreground mt-1">{event.description}</p>
-                                  )}
-                                  {event.event_time && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Hora: {event.event_time}
-                                    </p>
-                                  )}
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    Creado por:{" "}
-                                    {event.created_by === memberId ? "Fiel" : "Deidad"}
-                                  </p>
                                 </div>
-                              </div>
-                              {isDeity && (
-                                <div className="flex gap-2">
-                                  <RitualButton
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setEditingEvent(event);
-                                      setEventForm({
-                                        title: event.title,
-                                        description: event.description || "",
-                                        type: event.type,
-                                        date: event.event_date,
-                                        time: event.event_time || "",
-                                        notify_follower: event.notify_follower || false,
-                                        notify_deity: event.notify_deity || false,
-                                      });
-                                      setShowEventForm(true);
-                                    }}
-                                  >
-                                    <Edit className="w-3 h-3 mr-1" />
-                                    Editar
-                                  </RitualButton>
-                                  {event.created_by === user?.id && (
+                                {canEdit && (
+                                  <div className="flex gap-2">
+                                    <RitualButton
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setEditingEvent(event);
+                                        setEventForm({
+                                          title: event.title,
+                                          date: event.event_date,
+                                          start_time: event.start_time || "",
+                                          end_time: event.end_time || "",
+                                          is_important: event.is_important || false,
+                                        });
+                                        setShowEventForm(true);
+                                      }}
+                                    >
+                                      <Edit className="w-3 h-3 mr-1" />
+                                      Editar
+                                    </RitualButton>
                                     <RitualButton
                                       variant="outline"
                                       size="sm"
@@ -2516,15 +2510,15 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                     >
                                       <Trash2 className="w-3 h-3" />
                                     </RitualButton>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ))
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
                         )}
 
                         {/* Botón para agregar evento */}
-                        {isDeity && !showEventForm && (
+                        {!showEventForm && (
                           <RitualButton
                             variant="outline"
                             onClick={() => {
@@ -2533,7 +2527,13 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                               const dayNum = String(selectedDate.getDate()).padStart(2, "0");
                               const dateStr = `${year}-${month}-${dayNum}`;
                               
-                              setEventForm({ ...eventForm, date: dateStr });
+                              setEventForm({ 
+                                title: "", 
+                                date: dateStr,
+                                start_time: "",
+                                end_time: "",
+                                is_important: false,
+                              });
                               setShowEventForm(true);
                               setEditingEvent(null);
                             }}
@@ -2545,14 +2545,14 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                         )}
 
                         {/* Formulario de evento */}
-                        {showEventForm && isDeity && (
+                        {showEventForm && (
                           <div className="p-4 bg-background/50 border border-border/30 rounded-sm space-y-3">
                             <h4 className="font-heading text-sm text-silver">
                               {editingEvent ? "Editar Evento" : "Nuevo Evento"}
                             </h4>
 
                             <div className="space-y-2">
-                              <label className="text-xs text-muted-foreground">Título</label>
+                              <label className="text-xs text-muted-foreground">Título *</label>
                               <Input
                                 value={eventForm.title}
                                 onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
@@ -2560,66 +2560,44 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                               />
                             </div>
 
-                            <div className="space-y-2">
-                              <label className="text-xs text-muted-foreground">Descripción</label>
-                              <Textarea
-                                value={eventForm.description}
-                                onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
-                                placeholder="Descripción (opcional)"
-                                rows={2}
-                              />
-                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-xs text-muted-foreground">Hora de inicio</label>
+                                <Input
+                                  type="time"
+                                  value={eventForm.start_time}
+                                  onChange={(e) => setEventForm({ ...eventForm, start_time: e.target.value })}
+                                />
+                              </div>
 
-                            <div className="space-y-2">
-                              <label className="text-xs text-muted-foreground">Tipo</label>
-                              <select
-                                value={eventForm.type}
-                                onChange={(e) => setEventForm({ ...eventForm, type: e.target.value as any })}
-                                className="w-full p-2 bg-background border border-border/30 rounded-sm text-sm"
-                              >
-                                <option value="free">Tiempo libre</option>
-                                <option value="busy">Ocupado</option>
-                                <option value="event">Evento</option>
-                                <option value="other">Otro</option>
-                              </select>
-                            </div>
-
-                            <div className="space-y-2">
-                              <label className="text-xs text-muted-foreground">Hora (opcional)</label>
-                              <Input
-                                type="time"
-                                value={eventForm.time}
-                                onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <label className="text-xs text-muted-foreground">Notificaciones</label>
-                              <div className="space-y-1">
-                                <label className="flex items-center gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    checked={eventForm.notify_follower}
-                                    onChange={(e) =>
-                                      setEventForm({ ...eventForm, notify_follower: e.target.checked })
-                                    }
-                                    className="rounded"
-                                  />
-                                  Notificar al fiel
-                                </label>
-                                <label className="flex items-center gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    checked={eventForm.notify_deity}
-                                    onChange={(e) =>
-                                      setEventForm({ ...eventForm, notify_deity: e.target.checked })
-                                    }
-                                    className="rounded"
-                                  />
-                                  Notificarme a mí
-                                </label>
+                              <div className="space-y-2">
+                                <label className="text-xs text-muted-foreground">Hora de fin (opcional)</label>
+                                <Input
+                                  type="time"
+                                  value={eventForm.end_time}
+                                  onChange={(e) => setEventForm({ ...eventForm, end_time: e.target.value })}
+                                />
                               </div>
                             </div>
+
+                            {!isDeity && (
+                              <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-sm">
+                                <Checkbox
+                                  checked={eventForm.is_important}
+                                  onCheckedChange={(checked) =>
+                                    setEventForm({ ...eventForm, is_important: checked as boolean })
+                                  }
+                                />
+                                <label className="text-sm text-foreground">Marcar como importante</label>
+                              </div>
+                            )}
+
+                            {isDeity && (
+                              <div className="p-2 bg-gold/10 rounded-sm border border-gold/30 text-xs text-muted-foreground flex items-center gap-2">
+                                <Star className="w-3 h-3 text-gold fill-gold" />
+                                Los eventos creados por deidades son siempre importantes
+                              </div>
+                            )}
 
                             <div className="flex gap-2">
                               <RitualButton variant="gold" onClick={saveEvent} className="flex-1">
