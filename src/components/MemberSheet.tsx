@@ -43,6 +43,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
+  Grid,
+  List,
+  Camera,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -192,8 +198,14 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
   const [rewards, setRewards] = useState<any[]>([]);
   const [punishments, setPunishments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "info" | "tasks" | "practices" | "events" | "notes" | "rewards-punishments"
+    "info" | "tasks" | "practices" | "events" | "notes" | "rewards-punishments" | "evidences"
   >("info");
+
+  // Estados para la pestaña de evidencias
+  const [evidenceView, setEvidenceView] = useState<"list" | "gallery">("list");
+  const [expandedEvidence, setExpandedEvidence] = useState<string | null>(null);
+  const [selectedGalleryImage, setSelectedGalleryImage] = useState<any | null>(null);
+  const [deletingEvidence, setDeletingEvidence] = useState<string | null>(null);
 
   const isDeity = profile?.role === "deity";
 
@@ -1053,6 +1065,55 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
     }
   };
 
+  const deleteEvidence = async (assignmentId: string, evidenceUrl: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar esta evidencia? Esta acción no se puede deshacer.")) {
+      return;
+    }
+
+    setDeletingEvidence(assignmentId);
+
+    try {
+      // Extraer el path del archivo de la URL
+      const urlParts = evidenceUrl.split("/task-evidence/");
+      if (urlParts.length === 2) {
+        const filePath = urlParts[1];
+        
+        // Eliminar el archivo de Supabase Storage
+        const { error: storageError } = await supabase.storage
+          .from("task-evidence")
+          .remove([filePath]);
+
+        if (storageError) {
+          console.error("Error deleting file from storage:", storageError);
+        }
+      }
+
+      // Eliminar la URL de evidencia de la base de datos
+      const { error: updateError } = await supabase
+        .from("assigned_tasks")
+        .update({ evidence_url: null })
+        .eq("id", assignmentId);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Evidencia eliminada",
+        description: "La imagen ha sido eliminada correctamente",
+      });
+
+      loadMemberData();
+    } catch (error) {
+      console.error("Error deleting evidence:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la evidencia",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingEvidence(null);
+    }
+  };
+
   const adjustFaithPoints = async (delta: number, reason: string) => {
     if (!memberId || !isDeity || delta === 0) return;
 
@@ -1820,16 +1881,28 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                 Notas
               </button>
               {isDeity && (
-                <button
-                  onClick={() => setActiveTab("rewards-punishments")}
-                  className={`px-4 py-2 text-sm font-heading transition-colors ${
-                    activeTab === "rewards-punishments"
-                      ? "text-silver border-b-2 border-silver"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Premios y Consecuencias
-                </button>
+                <>
+                  <button
+                    onClick={() => setActiveTab("rewards-punishments")}
+                    className={`px-4 py-2 text-sm font-heading transition-colors ${
+                      activeTab === "rewards-punishments"
+                        ? "text-silver border-b-2 border-silver"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Premios y Consecuencias
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("evidences")}
+                    className={`px-4 py-2 text-sm font-heading transition-colors ${
+                      activeTab === "evidences"
+                        ? "text-silver border-b-2 border-silver"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Evidencias
+                  </button>
+                </>
               )}
             </div>
 
@@ -2760,6 +2833,243 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                       </div>
                     )}
                   </ParchmentCard>
+                </div>
+              )}
+
+              {/* Tab: Evidencias */}
+              {activeTab === "evidences" && isDeity && (
+                <div className="space-y-4">
+                  {/* Toggle entre vista de lista y galería */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-heading text-sm text-silver">Evidencias Fotográficas</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEvidenceView("list")}
+                        className={`p-2 rounded-sm border transition-colors ${
+                          evidenceView === "list"
+                            ? "border-silver bg-silver/10 text-silver"
+                            : "border-border/30 hover:border-silver/40 text-muted-foreground"
+                        }`}
+                        title="Vista de lista"
+                      >
+                        <List className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEvidenceView("gallery")}
+                        className={`p-2 rounded-sm border transition-colors ${
+                          evidenceView === "gallery"
+                            ? "border-silver bg-silver/10 text-silver"
+                            : "border-border/30 hover:border-silver/40 text-muted-foreground"
+                        }`}
+                        title="Vista de galería"
+                      >
+                        <Grid className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Vista de lista */}
+                  {evidenceView === "list" && (
+                    <ParchmentCard title="Lista de Evidencias" icon={<Camera className="w-4 h-4" />}>
+                      {followerTasks.filter((t) => t.evidence_url && t.status === "completed").length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">
+                          No hay evidencias fotográficas
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {followerTasks
+                            .filter((t) => t.evidence_url && t.status === "completed")
+                            .map((task) => (
+                              <div
+                                key={task.id}
+                                className="p-3 bg-background/50 rounded-sm border border-border/30 space-y-2"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1">
+                                    <h4 className="font-heading text-sm text-foreground">
+                                      {task.tasks?.title || "Tarea"}
+                                    </h4>
+                                    {task.tasks?.description && (
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        {task.tasks.description}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <Clock className="w-3 h-3 text-muted-foreground" />
+                                      <span className="text-xs text-muted-foreground">
+                                        Completada: {new Date(task.completed_at).toLocaleDateString("es", {
+                                          day: "numeric",
+                                          month: "long",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 shrink-0">
+                                    <button
+                                      onClick={() =>
+                                        setExpandedEvidence(
+                                          expandedEvidence === task.id ? null : task.id
+                                        )
+                                      }
+                                      className="p-2 rounded-sm border border-silver/40 hover:bg-silver/10 transition-colors"
+                                      title={expandedEvidence === task.id ? "Ocultar evidencia" : "Ver evidencia"}
+                                    >
+                                      {expandedEvidence === task.id ? (
+                                        <EyeOff className="w-4 h-4 text-silver" />
+                                      ) : (
+                                        <Eye className="w-4 h-4 text-silver" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={() => deleteEvidence(task.id, task.evidence_url)}
+                                      disabled={deletingEvidence === task.id}
+                                      className="p-2 rounded-sm border border-wine/40 hover:bg-wine/10 transition-colors disabled:opacity-50"
+                                      title="Eliminar evidencia"
+                                    >
+                                      {deletingEvidence === task.id ? (
+                                        <Loader2 className="w-4 h-4 text-wine animate-spin" />
+                                      ) : (
+                                        <Trash2 className="w-4 h-4 text-wine" />
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Imagen expandible */}
+                                {expandedEvidence === task.id && (
+                                  <div className="mt-3 pt-3 border-t border-border/30">
+                                    <img
+                                      src={task.evidence_url}
+                                      alt="Evidencia de tarea"
+                                      className="w-full rounded-sm border border-gold/30 shadow-lg"
+                                      style={{ maxHeight: "400px", objectFit: "contain" }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </ParchmentCard>
+                  )}
+
+                  {/* Vista de galería */}
+                  {evidenceView === "gallery" && (
+                    <ParchmentCard title="Galería de Evidencias" icon={<ImageIcon className="w-4 h-4" />}>
+                      {followerTasks.filter((t) => t.evidence_url && t.status === "completed").length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">
+                          No hay evidencias fotográficas
+                        </p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {followerTasks
+                              .filter((t) => t.evidence_url && t.status === "completed")
+                              .map((task) => (
+                                <button
+                                  key={task.id}
+                                  onClick={() => setSelectedGalleryImage(task)}
+                                  className="aspect-square rounded-sm overflow-hidden border border-border/30 hover:border-gold/40 transition-all hover:shadow-lg group"
+                                >
+                                  <img
+                                    src={task.evidence_url}
+                                    alt={task.tasks?.title || "Evidencia"}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                </button>
+                              ))}
+                          </div>
+
+                          {/* Modal de imagen seleccionada */}
+                          {selectedGalleryImage && (
+                            <div
+                              className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+                              onClick={() => setSelectedGalleryImage(null)}
+                            >
+                              <div
+                                className="bg-background border border-border rounded-sm max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="p-4 border-b border-border/30 flex items-center justify-between">
+                                  <h3 className="font-heading text-lg text-foreground">
+                                    {selectedGalleryImage.tasks?.title || "Evidencia"}
+                                  </h3>
+                                  <button
+                                    onClick={() => setSelectedGalleryImage(null)}
+                                    className="p-2 hover:bg-muted/20 rounded-sm transition-colors"
+                                  >
+                                    <X className="w-5 h-5" />
+                                  </button>
+                                </div>
+
+                                <div className="p-4 space-y-4">
+                                  <img
+                                    src={selectedGalleryImage.evidence_url}
+                                    alt={selectedGalleryImage.tasks?.title || "Evidencia"}
+                                    className="w-full rounded-sm border border-gold/30"
+                                    style={{ maxHeight: "500px", objectFit: "contain" }}
+                                  />
+
+                                  <div className="space-y-2 p-3 bg-muted/20 rounded-sm">
+                                    {selectedGalleryImage.tasks?.description && (
+                                      <div>
+                                        <p className="text-xs text-muted-foreground uppercase mb-1">
+                                          Descripción
+                                        </p>
+                                        <p className="text-sm text-foreground">
+                                          {selectedGalleryImage.tasks.description}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    <div>
+                                      <p className="text-xs text-muted-foreground uppercase mb-1">
+                                        Fecha de completado
+                                      </p>
+                                      <p className="text-sm text-foreground">
+                                        {new Date(selectedGalleryImage.completed_at).toLocaleDateString("es", {
+                                          day: "numeric",
+                                          month: "long",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </p>
+                                    </div>
+
+                                    <div className="flex gap-2 pt-2">
+                                      <RitualButton
+                                        variant="outline"
+                                        onClick={() => {
+                                          deleteEvidence(
+                                            selectedGalleryImage.id,
+                                            selectedGalleryImage.evidence_url
+                                          );
+                                          setSelectedGalleryImage(null);
+                                        }}
+                                        disabled={deletingEvidence === selectedGalleryImage.id}
+                                        className="flex-1 border-wine/40 text-wine hover:bg-wine/10"
+                                      >
+                                        {deletingEvidence === selectedGalleryImage.id ? (
+                                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="w-4 h-4 mr-2" />
+                                        )}
+                                        Eliminar evidencia
+                                      </RitualButton>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </ParchmentCard>
+                  )}
                 </div>
               )}
             </div>
