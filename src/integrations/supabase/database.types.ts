@@ -315,30 +315,33 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by: string
+          end_time: string | null
           event_date: string
-          event_time: string | null
-          event_type: string
           id: string
+          is_important: boolean | null
+          start_time: string | null
           title: string
           user_id: string
         }
         Insert: {
           created_at?: string | null
           created_by: string
+          end_time?: string | null
           event_date: string
-          event_time?: string | null
-          event_type: string
           id?: string
+          is_important?: boolean | null
+          start_time?: string | null
           title: string
           user_id: string
         }
         Update: {
           created_at?: string | null
           created_by?: string
+          end_time?: string | null
           event_date?: string
-          event_time?: string | null
-          event_type?: string
           id?: string
+          is_important?: boolean | null
+          start_time?: string | null
           title?: string
           user_id?: string
         }
