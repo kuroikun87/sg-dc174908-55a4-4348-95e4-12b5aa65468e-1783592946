@@ -26,10 +26,11 @@ import Link from "next/link";
 interface AppLayoutProps {
   children: React.ReactNode;
   title?: string;
+  icon?: React.ReactNode;
   showSidebar?: boolean;
 }
 
-export function AppLayout({ children, title, showSidebar = true }: AppLayoutProps) {
+export function AppLayout({ children, title, icon, showSidebar = true }: AppLayoutProps) {
   const { profile, signOut } = useAuth();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
