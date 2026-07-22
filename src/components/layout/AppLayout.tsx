@@ -3,8 +3,9 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { BookPage } from "@/components/layout/BookPage";
 import { RitualButton } from "@/components/ui/ritual-button";
-import { Crown, Heart, ArrowLeft, LogOut } from "lucide-react";
+import { Crown, Heart, ArrowLeft, LogOut, Home, Users, Zap, Award } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import Link from "next/link";
 
 interface AppLayoutProps {
   children: React.ReactNode;

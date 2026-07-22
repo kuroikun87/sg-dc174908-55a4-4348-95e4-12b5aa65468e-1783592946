@@ -281,11 +281,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       // Cargar tareas asignadas con JOIN
       const { data: tasksData, error: tasksError } = await supabase
         .from("assigned_tasks")
-        .select(`
-          *,
-          tasks(*),
-          profiles!assigned_tasks_assigned_by_fkey(display_name, avatar_url)
-        `)
+        .select("*, tasks(*)")
         .eq("follower_id", memberId)
         .order("created_at", { ascending: false });
       
@@ -293,7 +289,24 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
         console.error("Error loading tasks:", tasksError);
       }
       
-      setFollowerTasks(tasksData || []);
+      // Cargar perfiles de quienes asignaron las tareas
+      if (tasksData && tasksData.length > 0) {
+        const assignerIds = [...new Set(tasksData.map(t => t.assigned_by).filter(Boolean))];
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", assignerIds);
+        
+        // Mapear perfiles a las tareas
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+        const enrichedTasks = tasksData.map(task => ({
+          ...task,
+          assigner_profile: task.assigned_by ? profilesMap.get(task.assigned_by) : null
+        }));
+        setFollowerTasks(enrichedTasks);
+      } else {
+        setFollowerTasks([]);
+      }
 
       // Cargar premios asignados con JOIN
       const { data: rewardsData } = await supabase
