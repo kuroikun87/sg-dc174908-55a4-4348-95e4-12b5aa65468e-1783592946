@@ -281,7 +281,7 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
       // Cargar tareas asignadas con JOIN
       const { data: tasksData } = await supabase
         .from("assigned_tasks")
-        .select("*, tasks(*), profiles!assigned_tasks_assigned_by_fkey(display_name, avatar_url)")
+        .select("*, tasks(*), assigned_by_profile:profiles!assigned_by(display_name, avatar_url)")
         .eq("follower_id", memberId)
         .order("created_at", { ascending: false });
       setFollowerTasks(tasksData || []);
@@ -2906,11 +2906,11 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                         })}
                                       </span>
                                     </div>
-                                    {task.profiles && (
+                                    {task.assigned_by_profile && (
                                       <div className="flex items-center gap-2 mt-1">
                                         <Crown className="w-3 h-3 text-wine" />
                                         <span className="text-xs text-muted-foreground">
-                                          Asignada por: <span className="text-foreground">{task.profiles.display_name}</span>
+                                          Asignada por: <span className="text-foreground">{task.assigned_by_profile.display_name}</span>
                                         </span>
                                       </div>
                                     )}
@@ -3033,20 +3033,20 @@ export function MemberSheet({ memberId, isOpen, onClose }: MemberSheetProps) {
                                       </div>
                                     )}
 
-                                    {selectedGalleryImage.profiles && (
+                                    {selectedGalleryImage.assigned_by_profile && (
                                       <div>
                                         <p className="text-xs text-muted-foreground uppercase mb-1">
                                           Asignada por
                                         </p>
                                         <div className="flex items-center gap-2">
                                           <Avatar className="w-5 h-5">
-                                            <AvatarImage src={selectedGalleryImage.profiles.avatar_url || undefined} />
+                                            <AvatarImage src={selectedGalleryImage.assigned_by_profile.avatar_url || undefined} />
                                             <AvatarFallback className="text-[10px]">
-                                              {selectedGalleryImage.profiles.display_name?.[0] || "?"}
+                                              {selectedGalleryImage.assigned_by_profile.display_name?.[0] || "?"}
                                             </AvatarFallback>
                                           </Avatar>
                                           <span className="text-sm text-foreground">
-                                            {selectedGalleryImage.profiles.display_name}
+                                            {selectedGalleryImage.assigned_by_profile.display_name}
                                           </span>
                                         </div>
                                       </div>
